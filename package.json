@@ -1,0 +1,41 @@
+{
+	"name": "reversible-preproc",
+	"version": "1.0.1",
+	"description": "A preproc system with a powerful condition language. It uses annotated comments to switch off code, for convenient in place switching beween configurations.",
+	"main": "lib/index.js",
+	"files": [
+		"test/*"
+	],
+	"directories": {
+		"lib": "lib",
+		"test": "test"
+	},
+	"scripts": {
+		"build": "./compileSrc.sh",
+		"test": "node -- test/test-reversible-preproc.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/craigphicks/reversible-preproc.git"
+	},
+	"keywords": [
+		"preprocessor",
+		"reversible",
+		"inline-functions"
+	],
+	"author": "Craig P Hicks <dev@craigphicks.com> craigphicks.com",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/craigphicks/reversible-preproc/issues"
+	},
+	"homepage": "https://github.com/craigphicks/reversible-preproc#README.md",
+	"devDependencies": {
+		"rollup": "^1.19.4",
+		"rollup-plugin-commonjs": "^10.0.2",
+		"rollup-plugin-multi-entry": "^2.1.0",
+		"rollup-plugin-node-resolve": "^5.2.0",
+		"jsep": "^0.3.4"
+	},
+	"dependencies": {
+	}
+}

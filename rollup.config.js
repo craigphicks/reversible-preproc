@@ -1,0 +1,39 @@
+// For maximum control, arrays of globs to include and exclude.
+
+import nodeResolve from "rollup-plugin-node-resolve"
+import commonjs from "rollup-plugin-commonjs"
+
+
+export default [
+	{
+		input: "src/reversible-preproc.mjs",
+		output: {
+			file: "lib/index.js",
+			format: "cjs"
+		},
+		plugins:[
+			nodeResolve({}),
+			commonjs({})
+		]
+	},{
+		input:"src/test/test-reversible-preproc.mjs",
+		//		plugins: [myResolveId()],
+		plugins:[
+			{
+//				name: "resolveId",
+				resolveId( source ){
+					console.log("myResolveId: ",source)
+					if (source.includes("/reversible-preproc")){
+						return {id: '../lib/index.js', external: true}
+					}
+					return null
+				}
+			}
+		],
+		output: {
+			file : "test/test-reversible-preproc.js",
+			format: "cjs"
+		}
+	}
+]
+

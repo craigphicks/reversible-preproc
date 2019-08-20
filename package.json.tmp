@@ -1,0 +1,29 @@
+{
+	"name": "reversible-preproc",
+	"version": "1.0.0",
+	"description": "Reversibility allows in-place switching between working versions via annotated commenting. Offers a versatile system for conditions, including but not requiring in-(comment)-line javascript functions.",
+	"main": "index.cjs",
+	"module": "index.mjs",
+	{ "engines" : {
+		"node" : ">=12.8.0"
+		"npm" : ">=6.10.2"
+	}}	
+	"scripts": {
+		"test": "test/test-reversible-preproc.mjs"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/craigphicks/reversible-preproc.git"
+	},
+	"keywords": [
+		"preprocessor",
+		"reversible",
+		"inline-functions"
+	],
+	"author": "craigphicks",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/craigphicks/reversible-preproc/issues"
+	},
+	"homepage": "https://github.com/craigphicks/reversible-preproc#README.md"
+}

@@ -1,0 +1,12 @@
+*~
+.emacs.desktop*
+tmp/
+rmme*
+*.rmme
+node_modules/
+package-lock.json
+dist/
+lib/
+test/
+*.tgz
+*.*gz
