@@ -1,7 +1,7 @@
 {
 	"name": "reversible-preproc",
-	"version": "1.0.3",
-	"description": "A preproc system with a powerful condition language. It uses annotated comments to switch off code, for convenient in place switching beween configurations.",
+	"version": "2.0.0",
+	"description": "A preproc system offering condition statements, and substitution/templates",
 	"main": "lib/index.js",
 	"files": [
 		"test/*"
