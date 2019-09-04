@@ -7,7 +7,11 @@ class RppError extends RppBaseError {
   constructor(...params) {
     super(...params)
   }
+}
 
+function assert(cond, msg) {
+  if (!cnd)
+    throw RppError(msg)
 }
 
 
@@ -42,7 +46,7 @@ function getLineHeadSymbol(line, arrCmd, arrAnn) {
     let start = opt.cmdStem.length
     for (item of arrCmd) {
       if (testLineHead(line, start, item[0]))
-        return item[1]
+        return [item[1], start + item[0].lenght + 1]
     }
     throw new RppError(`no command found after stem in ${line}`)
   } else if (testLineHead(line, 0, opt.annStem)) {
@@ -50,11 +54,11 @@ function getLineHeadSymbol(line, arrCmd, arrAnn) {
     let start = opt.annStem.length
     for (item of arrAnn) {
       if (testLineHead(line, start, item[0]))
-        return item[1]
+        return [item[1], start + item[0].lenght + 1]
     }
     throw new RppError(`no annotation found after stem in ${line}`)
   } else
-    return null // not command or annotated line
+    return [null, null] // not command or annotated line
 }
 
 
@@ -139,9 +143,9 @@ class ReversiblePreproc {
       linum: 0, // line number of the input file (count starts at 1)
       ifOnLinum: -1, // the input line number of current innermost if block start
       ifOn: false, // currently in an if blocks (possibly multiple)
-      stackIf: [], // stack for nested if blocks [ ..., [<startline>,<true/false>],...] 
+      ifStack: [], // stack for nested if blocks [ ..., [<startline>,<true/false>],...] 
       renderedOn: false, // currently in an annotated rendered region, (will be cleared, maybe rerendered) 
-      tplString: null, // cmd-tpl lines are accumulated until cmd-render is encountered, thenoutput 
+      tplStringArr: [], // cmd-tpl lines are accumulated until cmd-render is encountered, thenoutput 
     }
     this.cmdsSorted = [
       [options.cmdIf, symCmdIf],
@@ -171,34 +175,56 @@ class ReversiblePreproc {
 
     Object.seal(this)
   }
+  renderMustache(tplArr, defines){
+    // return a string of possibly multiple lines
+    return "mustache"
+  }
 
   _parseLine_aux2(line, state) { // can throw, returns [isCmd, strippedLine / null ]
     // if ps 
-    let sym = getLineHeadSymbol(line, this.arrCmd, this.arrAnn)
+    let [sym, offset] = getLineHeadSymbol(line, this.arrCmd, this.arrAnn)
+    if (this.parseState.tplStringArr.length) {
+      // only more tpl string or render cmd are allowed
+      if (sym===symCmdTpl){
+        this.parseState.tplString.push(line.substr(offset))
+        return [false, null]
+      } else if (sym===symCmdRender){
+        
+      }
+    }
     if (!sym) {
-      if (this.parseState.renderedOn) 
+      if (this.parseState.renderedOn)
         return [false, null] // strip entire line -> null 
       else
         return [false, line]
-    } 
-    else if (sym === symAnnPlain) { 
+    }
+    else if (sym === symAnnPlain) {
       // strip and return line w/out annotation
-      return [false, line.substr(
-        this.options.annStem.length + this.options.annPlain.length + 1)]
-    } 
+      return [false, line.substr(offset)]
+    }
     else if (sym === symAnnRendered) {
-      if (this.parseState.renderedOn)
-        throw RppError('renderedOn is already true')
+      assert(!this.parseState.renderedOn, 'renderedOn is already true')
       this.parseState.renderedOn = true
       return [false, null]
-    } 
+    }
     else if (sym === symAnnEndRendered) {
-      if (!this.parseState.renderedOn)
-        throw RppError('renderedOn is not true')
+      assert(this.parseState.renderedOn, 'renderedOn is not true')
       this.parseState.renderedOn = false
       return [false, null]
-    } 
-
+    }
+    else if (sym === symCmdIf) {
+      assert(!this.parseState.renderedOn, 'renderedOn at if command')
+      let sub = line.substr(offset)
+      let [isOn, err] = judgeLineArg(sub, this.definesJson, this.jsepPreprocInterpret)
+      if (err) throw RppError('judgeLineArg return error')
+      // save the previous state 
+      this.parseState.ifStack.push([this.parseState.ifOn, this.parseState.ifOnLinum])
+      this.parseState.ifOn = isOn
+      this.parseState.ifOnLinum = this.parseState.linum
+    }
+    else if (sym===symCmdEndif) {
+     //     
+    }
 
   }
   line2(line, callback = null) {
