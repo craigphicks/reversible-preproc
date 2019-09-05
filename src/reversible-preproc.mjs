@@ -2,6 +2,7 @@
 
 import JsepPreprocInterpret from './jsep-preproc-interpret.mjs'
 import RppBaseError from './prependable-error.mjs'
+import Mustache from 'mustache'
 
 class RppError extends RppBaseError {
   constructor(...params) {
@@ -10,8 +11,8 @@ class RppError extends RppBaseError {
 }
 
 function assert(cond, msg) {
-  if (!cnd)
-    throw RppError(msg)
+  if (!cond)
+    throw new RppError(msg)
 }
 
 
@@ -175,124 +176,141 @@ class ReversiblePreproc {
 
     Object.seal(this)
   }
-  renderMustache(tplArr, defines){
+  renderMustache(tplArr, view) {
     // return a string of possibly multiple lines
-    return "mustache"
+
+    return Mustache.render(tplArr.join(" "), view)
   }
 
   _parseLine_aux2(line, state) { // can throw, returns [isCmd, strippedLine / null ]
     // if ps 
     let [sym, offset] = getLineHeadSymbol(line, this.arrCmd, this.arrAnn)
-    if (this.parseState.tplStringArr.length) {
-      // only more tpl string or render cmd are allowed
-      if (sym===symCmdTpl){
-        this.parseState.tplString.push(line.substr(offset))
-        return [false, null]
-      } else if (sym===symCmdRender){
-        
-      }
-    }
     if (!sym) {
+      assert(this.parseState.tplStringArr.length === 0, "this.parseState.tplStringArr.length===0")
       if (this.parseState.renderedOn)
         return [false, null] // strip entire line -> null 
       else
         return [false, line]
     }
-    else if (sym === symAnnPlain) {
-      // strip and return line w/out annotation
-      return [false, line.substr(offset)]
+    if (this.parseState.tplStringArr.length) {
+      // only more tpl string or render cmd are allowed
+      if (sym === symCmdTpl) {
+        this.parseState.tplString.push(line.substr(offset))
+        return [false, line]
+      } else if (sym === symCmdRender) {
+        let res = renderMustache(this.parseState.tplStringArr, this.definesJson)
+        this.parseState.tplStringArr = []
+        return [true, [line, res]]
+      }
+      else
+        throw new RppError('expecting symCmdTpl or symCmdRender')
     }
-    else if (sym === symAnnRendered) {
+    assert(sym !== symCmdRender, "sym!==symCmdRender")
+    if (sym === symAnnRendered) {
       assert(!this.parseState.renderedOn, 'renderedOn is already true')
       this.parseState.renderedOn = true
       return [false, null]
     }
-    else if (sym === symAnnEndRendered) {
+    if (sym === symAnnEndRendered) {
       assert(this.parseState.renderedOn, 'renderedOn is not true')
       this.parseState.renderedOn = false
       return [false, null]
     }
-    else if (sym === symCmdIf) {
-      assert(!this.parseState.renderedOn, 'renderedOn at if command')
+    assert(!this.parseState.renderedOn, 'exepected state renderedOn===false ')
+    if (sym === symAnnPlain) {
+      // strip and return line w/out annotation
+      return [false, line.substr(offset)]
+    }
+    if (sym === symCmdIf) {
       let sub = line.substr(offset)
       let [isOn, err] = judgeLineArg(sub, this.definesJson, this.jsepPreprocInterpret)
-      if (err) throw RppError('judgeLineArg return error')
+      if (err) throw new RppError('judgeLineArg return error')
       // save the previous state 
       this.parseState.ifStack.push([this.parseState.ifOn, this.parseState.ifOnLinum])
       this.parseState.ifOn = isOn
       this.parseState.ifOnLinum = this.parseState.linum
+      return [false, line]
     }
-    else if (sym===symCmdEndif) {
-     //     
+    if (sym === symCmdEndif) {
+      if (!this.stack.length) {
+        // too many end scope commnand - like unbalanced parentheses.
+        throw new RppError(`unexpected end directive line ${this.linum}, (unbalanced?)`)
+      }
+      [this.parseState.ifOn, this.parseState.ifOnLinum]
+        = this.parseState.ifStack[this.parseState.ifStack.length - 1]
+      this.stack.pop()
+      return [false, line]
     }
-
+    throw new RppError('unhandled symbol')
+    // TODO cases symCmdElif, symCmdElse, symCmdTplRender, symCmdIfTplRender
   }
-  line2(line, callback = null) {
-    try {
-      this.parseState.linum++ // first line is line 1
 
-      let [isCmd, strippedLine, err] = this._parseLine_aux(line)
+  // line2(line, callback = null) {
+  //   try {
+  //     this.parseState.linum++ // first line is line 1
+
+  //     let [isCmd, strippedLine, err] = this._parseLine_aux(line)
 
 
-      let dbg = ""
-      if (this.debugOutput)
-        dbg = `[${this.onLinum}, ${this.linum}]`
-      let [isCmd, strippedLine, err] = this._parseLine_aux(line)
-      if (isCmd) {
-        if (this.options.testMode) {
-          if (isCmd === 'start') {
-            return [
-              err,
-              dbg = (this.on ? 'true,  ' : 'false, ')
-              + `${strippedLine}`
-            ]
-          } else {
-            return [err, null]
-          }
-        } else {
-          if (callback)
-            callback(err, (dbg + `${strippedLine}`))
-          else
-            return [err, (dbg + `${strippedLine}`)]
-        }
-      } else {
-        if (this.options.testMode) {
-          if (callback)
-            callback(err, null)
-          else
-            return [err, null]
-        }
-        if (!this.on) {
-          let ret = (dbg
-            + this.options.commentMark + this.options.reversibleCommentIndicator
-            + `${strippedLine}`)
-          if (callback)
-            callback(err, ret)
-          else
-            return [err, ret]
-        } else {
-          if (callback)
-            callback(err, (dbg + `${strippedLine}`))
-          else
-            return [err, (dbg + `${strippedLine}`)]
-        }
-      }
-    }
-    catch (e) {
-      if (e instanceof Error) {
-        if (callback)
-          callback(e, null)
-        else
-          return [e, null]
-      }
-      else {
-        if (callback)
-          callback(new RppError("unknown error: " + e), null)
-        else
-          return [new RppError("unknown error: " + e), null]
-      }
-    }
-  }
+  //     let dbg = ""
+  //     if (this.debugOutput)
+  //       dbg = `[${this.onLinum}, ${this.linum}]`
+  //     let [isCmd, strippedLine, err] = this._parseLine_aux(line)
+  //     if (isCmd) {
+  //       if (this.options.testMode) {
+  //         if (isCmd === 'start') {
+  //           return [
+  //             err,
+  //             dbg = (this.on ? 'true,  ' : 'false, ')
+  //             + `${strippedLine}`
+  //           ]
+  //         } else {
+  //           return [err, null]
+  //         }
+  //       } else {
+  //         if (callback)
+  //           callback(err, (dbg + `${strippedLine}`))
+  //         else
+  //           return [err, (dbg + `${strippedLine}`)]
+  //       }
+  //     } else {
+  //       if (this.options.testMode) {
+  //         if (callback)
+  //           callback(err, null)
+  //         else
+  //           return [err, null]
+  //       }
+  //       if (!this.on) {
+  //         let ret = (dbg
+  //           + this.options.commentMark + this.options.reversibleCommentIndicator
+  //           + `${strippedLine}`)
+  //         if (callback)
+  //           callback(err, ret)
+  //         else
+  //           return [err, ret]
+  //       } else {
+  //         if (callback)
+  //           callback(err, (dbg + `${strippedLine}`))
+  //         else
+  //           return [err, (dbg + `${strippedLine}`)]
+  //       }
+  //     }
+  //   }
+  //   catch (e) {
+  //     if (e instanceof Error) {
+  //       if (callback)
+  //         callback(e, null)
+  //       else
+  //         return [e, null]
+  //     }
+  //     else {
+  //       if (callback)
+  //         callback(new RppError("unknown error: " + e), null)
+  //       else
+  //         return [new RppError("unknown error: " + e), null]
+  //     }
+  //   }
+  // }
 
   _parseLine_aux(line) {
     if (line.slice(0, 2) !== this.options.commentMark)
