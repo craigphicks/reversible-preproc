@@ -5,6 +5,7 @@ import RppBaseError from './prependable-error.mjs'
 import Mustache from 'mustache'
 import dedent from 'dedent'
 import jsep from 'jsep'
+//import { AssertionError } from 'assert';
 
 // globally disable all Mustache escaping 
 Mustache.escape = function (text) { return text }
@@ -26,10 +27,15 @@ var defaultOptions = {
   testMode: false, // cmd start lines only prepended by true or false
   debugOutput: false,
   // 1.x.x obsolete
-  commentMark: '//',
-  reversibleCommentIndicator: '!!',
+//  commentMark: '//',
+//  reversibleCommentIndicator: '!!',
   // 2.x.x
+  // cmdStemMulti(StartEnd) used for 
+  //    
+  cmdStemMultiStart: '/*--',
+  cmdStemMultiEnd: '--*/',
   cmdStem: '//--',
+  cmdAddDef: 'addDef',
   cmdIf: 'if',
   cmdElse: 'else',
   cmdElif: 'elif',
@@ -112,6 +118,7 @@ const reservedIdentifiers = [
   'true', 'false', 'null', 'undefined', 'def', 'ndef'
 ]
 
+const symCmdAddDef = Symbol('cmdAddDef')
 const symCmdIf = Symbol('cmdIf')
 const symCmdElse = Symbol('cmdElse')
 const symCmdElif = Symbol('cmdElif')
@@ -133,8 +140,8 @@ class ReversiblePreproc {
       if (!Reflect.ownKeys(options).includes(k))
         options[k] = defaultOptions[k]
     this.options = options
-    if (!this.options.commentMark.length)
-      throw new RppError("options.commentMark cannot be zero length")
+    // if (!this.options.commentMark.length)
+    //   throw new RppError("options.commentMark cannot be zero length")
     {
       if (typeof definesJson === 'object') {
         if (definesJson instanceof Array)
@@ -163,10 +170,12 @@ class ReversiblePreproc {
       tplPartials: {},
     }
     this.cmdsSorted = [
+      [options.cmdAddDef, symCmdAddDef],
       [options.cmdIf, symCmdIf],
       [options.cmdElse, symCmdElse],
       [options.cmdElif, symCmdElif],
       [options.cmdEndif, symCmdEndif],
+      [options.cmdMacro, symCmdMacro],
       [options.cmdTpl, symCmdTpl],
       [options.cmdPartials, symCmdPartials],
       [options.cmdRender, symCmdRender],
@@ -208,7 +217,6 @@ class ReversiblePreproc {
     return lineArr
   }
 
-
   _parseLine_aux2(line) { // can throw, returns [isCmd, strippedLine / null ]
     // if ps 
     let [sym, offset] = getLineHeadSymbol(line, this.options, this.cmdsSorted, this.annsSorted)
@@ -230,11 +238,38 @@ class ReversiblePreproc {
       } else
         return [false, line]
     }
+    if (sym === symCmdAddDef) {
+      let subs = line.substr(offset)
+      let lhs = subs.trimLeft().split(/\s+/g,1)
+      _assert(lhs && lhs instanceof Array && lhs.length,
+        `lhs ${lhs} parse error - 1`)
+      lhs=lhs[0]
+      _assert(lhs.length,
+        `lhs ${lhs} parse error - 2`)
+      let members = lhs.split('.')
+      if (!Reflect.ownKeys(this.definesJson).includes(members[0]))
+        this.definesJson[members[0]] = null
+      let parent = this.definesJson
+      for (let i = 0; i < members.length - 1; i++) {
+        let m = members[i]
+        let n = members[i + 1]
+        if (!Reflect.ownKeys(parent[n]).includes(m))
+          parent[n][m] = null
+        parent = parent[n]
+      }
+      let tpl = subs.substring(lhs.length).trimLeft()
+      parent[members.slice(-1)] = tpl
+      return [false, line]
+    }
     if (sym === symCmdMacro) {
       let atp = jsep(line.substr(offset))
       _assert(atp.type === 'CallExpression'
         && atp.callee.type === 'Identifier',
         'macro parse error')
+      // macro name
+      _assert(this.definesJson[atp.callee.name],
+        `no macro ${atp.callee.name} found in defines`)
+      let tpl = this.definesJson[atp.callee.name]
       // setup partials
       let partials = {}
       for (let n = 0; n < atp.arguments.length; n++) {
@@ -253,9 +288,10 @@ class ReversiblePreproc {
             type unknow: ${arg.type}`)
         }
       }
-      let res = this._renderMustache(tpl,this.definesJson,partials)
-      let lineArr = this._makeOutupLineArr(line,res)
-      return [true,lineArr]
+      let res = ReversiblePreproc._renderMustache(
+        tpl, this.definesJson, partials)
+      let lineArr = this._makeOutupLineArr(line, res)
+      return [true, lineArr]
     } // if (sym === symCmdMacro)
     if (sym === symCmdTpl) {
       this.parseState.tplStringArr.push(line.substr(offset))
@@ -270,12 +306,12 @@ class ReversiblePreproc {
     if (this.parseState.tplStringArr.length) {
       // only more tpl string or render cmd are allowed
       if (sym === symCmdRender) {
-        let res = this._renderMustache(
+        let res = ReversiblePreproc._renderMustache(
           this.parseState.tplStringArr.join(" "),
           this.definesJson,
           this.parseState.tplPartials
         )
-        let lineArr = this._makeOutupLineArr(line,res)
+        let lineArr = this._makeOutupLineArr(line, res)
         this.parseState.tplStringArr = []
         this.parseState.tplPartials = {}
         return [true, lineArr]
