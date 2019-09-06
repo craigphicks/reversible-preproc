@@ -3,6 +3,11 @@
 import JsepPreprocInterpret from './jsep-preproc-interpret.mjs'
 import RppBaseError from './prependable-error.mjs'
 import Mustache from 'mustache'
+import dedent from 'dedent'
+import jsep from 'jsep'
+
+// globally disable all Mustache escaping 
+Mustache.escape = function (text) { return text }
 
 class RppError extends RppBaseError {
   constructor(...params) {
@@ -10,7 +15,8 @@ class RppError extends RppBaseError {
   }
 }
 
-function assert(cond, msg) {
+// _assert with an underbar 
+function _assert(cond, msg) {
   if (!cond)
     throw new RppError(msg)
 }
@@ -28,8 +34,10 @@ var defaultOptions = {
   cmdElse: 'else',
   cmdElif: 'elif',
   cmdEndif: 'endif',
+  cmdMacro: 'macro',
   cmdTpl: 'tpl',
   cmdRender: 'render',
+  cmdPartials: 'partials',
   cmdTplRender: 'tplRender', // in a single line
   cmdIfTplRender: 'ifTplRender', // in a single line
   annPlain: 'plain',
@@ -38,24 +46,27 @@ var defaultOptions = {
   annStem: '//!!',
 }
 
-function getLineHeadSymbol(line, arrCmd, arrAnn) {
+function getLineHeadSymbol(line, opt, arrCmd, arrAnn) {
   function testLineHead(line, start, str) {
     return line.substr(start, str.length) === str
   }
-  if (testLineHead(line, 0, opt.cmdStem)) {
+  let wsOff = line.search(/\S/)
+  if (wsOff == -1)
+    return [null, null] // empty line 
+  if (testLineHead(line, wsOff, opt.cmdStem)) {
     //
-    let start = opt.cmdStem.length
-    for (item of arrCmd) {
+    let start = wsOff + opt.cmdStem.length
+    for (let item of arrCmd) {
       if (testLineHead(line, start, item[0]))
-        return [item[1], start + item[0].lenght + 1]
+        return [item[1], start + item[0].length + 1]
     }
     throw new RppError(`no command found after stem in ${line}`)
-  } else if (testLineHead(line, 0, opt.annStem)) {
+  } else if (testLineHead(line, wsOff, opt.annStem)) {
     //
-    let start = opt.annStem.length
-    for (item of arrAnn) {
+    let start = wsOff + opt.annStem.length
+    for (let item of arrAnn) {
       if (testLineHead(line, start, item[0]))
-        return [item[1], start + item[0].lenght + 1]
+        return [item[1], start + item[0].length + 1]
     }
     throw new RppError(`no annotation found after stem in ${line}`)
   } else
@@ -105,7 +116,9 @@ const symCmdIf = Symbol('cmdIf')
 const symCmdElse = Symbol('cmdElse')
 const symCmdElif = Symbol('cmdElif')
 const symCmdEndif = Symbol('cmdEndif')
+const symCmdMacro = Symbol('cmdMacro')
 const symCmdTpl = Symbol('cmdTpl')
+const symCmdPartials = Symbol('cmdPartials')
 const symCmdRender = Symbol('cmdRender')
 const symCmdTplRender = Symbol('cmdTplRender')
 const symCmdIfTplRender = Symbol('cmdIfTplRender')
@@ -136,9 +149,9 @@ class ReversiblePreproc {
     }
     this.jsepPreprocInterpret = new JsepPreprocInterpret(definesJson)
     this.linum = -1
-    this.onLinum = -1
-    this.on = 1
-    this.stack = []
+    //    this.onLinum = -1
+    //    this.on = 1
+    //    this.stack = []
     // 2.x.x 
     this.parseState = {
       linum: 0, // line number of the input file (count starts at 1)
@@ -147,6 +160,7 @@ class ReversiblePreproc {
       ifStack: [], // stack for nested if blocks [ ..., [<startline>,<true/false>],...] 
       renderedOn: false, // currently in an annotated rendered region, (will be cleared, maybe rerendered) 
       tplStringArr: [], // cmd-tpl lines are accumulated until cmd-render is encountered, thenoutput 
+      tplPartials: {},
     }
     this.cmdsSorted = [
       [options.cmdIf, symCmdIf],
@@ -154,6 +168,7 @@ class ReversiblePreproc {
       [options.cmdElif, symCmdElif],
       [options.cmdEndif, symCmdEndif],
       [options.cmdTpl, symCmdTpl],
+      [options.cmdPartials, symCmdPartials],
       [options.cmdRender, symCmdRender],
       [options.cmdTplRender, symCmdTplRender],
       [options.cmdIfTplRender, symCmdIfTplRender],
@@ -161,7 +176,7 @@ class ReversiblePreproc {
     this.annsSorted = [
       [options.annPlain, symAnnPlain],
       [options.annRendered, symAnnRendered],
-      [options.annEndRendered, symEndRendered],
+      [options.annEndRendered, symAnnEndRendered],
     ]
     this.cmdsSorted.sort((a, b) => {
       (a.length > b.length) ? 1 :
@@ -171,52 +186,136 @@ class ReversiblePreproc {
       (a.length > b.length) ? 1 :
         (a.length < b.length) ? -1 : 0
     })
-
-
-
     Object.seal(this)
   }
-  renderMustache(tplArr, view) {
-    // return a string of possibly multiple lines
 
-    return Mustache.render(tplArr.join(" "), view)
+  static _renderMustache(tpl, defines, partials = null) {
+    // we might want to enable recursive rendering in the future
+    let res = Mustache.render(tpl, defines)
+    if (partials && Reflect.ownKeys(partials).length > 0) {
+      res = Mustache.render(res, defines, partials)
+    }
+    return res
   }
 
-  _parseLine_aux2(line, state) { // can throw, returns [isCmd, strippedLine / null ]
+  _makeOutupLineArr(line, res) {
+    let pre = this.options.annStem + this.options.annRendered
+    let post = this.options.annStem + this.options.annEndRendered
+    let lineArr = [line]
+      .concat([pre])
+      .concat(res.split('\n'))
+      .concat([post])
+    return lineArr
+  }
+
+
+  _parseLine_aux2(line) { // can throw, returns [isCmd, strippedLine / null ]
     // if ps 
-    let [sym, offset] = getLineHeadSymbol(line, this.arrCmd, this.arrAnn)
+    let [sym, offset] = getLineHeadSymbol(line, this.options, this.cmdsSorted, this.annsSorted)
+    // if it is symAnnPlain, then we sym, offset, and line before proceeding (don't return)
+    if (sym === symAnnPlain) {
+      line = line.substr(offset)
+      sym = null
+      offset = 0
+    }
     if (!sym) {
-      assert(this.parseState.tplStringArr.length === 0, "this.parseState.tplStringArr.length===0")
+      _assert(this.parseState.tplStringArr.length === 0, "this.parseState.tplStringArr.length===0")
       if (this.parseState.renderedOn)
         return [false, null] // strip entire line -> null 
-      else
+      else if (this.parseState.ifOnLinum !== -1) {
+        if (this.parseState.ifOn)
+          return [false, line]
+        else
+          return [false, this.options.annStem + this.options.annPlain + " " + line]
+      } else
         return [false, line]
+    }
+    if (sym === symCmdMacro) {
+      let atp = jsep(line.substr(offset))
+      _assert(atp.type === 'CallExpression'
+        && atp.callee.type === 'Identifier',
+        'macro parse error')
+      // setup partials
+      let partials = {}
+      for (let n = 0; n < atp.arguments.length; n++) {
+        let arg = atp.arguments[n]
+        _assert(['Identifier', 'Literal'].includes(arg.type),
+          'macro arg parse error')
+        if (arg.type === 'Literal') {
+          partials[Number.toString(n)] = arg.raw
+        } else if (arg.type === 'Identifier') {
+          _assert(Reflect.ownKeys(this.definesJson).includes(arg.name),
+            `macro arg unquoted identifier not found in defines: ${arg.name}`)
+          partials[Number.toString(n)] = JSON.stringify(this.definesJson)
+        } else {
+          throw new RppError(
+            dedent`macro arg ${JSON.stringify(arg)} parse error, 
+            type unknow: ${arg.type}`)
+        }
+      }
+      let res = this._renderMustache(tpl,this.definesJson,partials)
+      let lineArr = this._makeOutupLineArr(line,res)
+      return [true,lineArr]
+    } // if (sym === symCmdMacro)
+    if (sym === symCmdTpl) {
+      this.parseState.tplStringArr.push(line.substr(offset))
+      return [false, line]
+    }
+    if (sym === symCmdPartials) {
+      //let evaled = eval(line.substr(offset))
+      let partials = JSON.parse(line.substr(offset))
+      Object.assign(this.parseState.tplPartials, partials)
+      return [false, line]
     }
     if (this.parseState.tplStringArr.length) {
       // only more tpl string or render cmd are allowed
-      if (sym === symCmdTpl) {
-        this.parseState.tplString.push(line.substr(offset))
-        return [false, line]
-      } else if (sym === symCmdRender) {
-        let res = renderMustache(this.parseState.tplStringArr, this.definesJson)
+      if (sym === symCmdRender) {
+        let res = this._renderMustache(
+          this.parseState.tplStringArr.join(" "),
+          this.definesJson,
+          this.parseState.tplPartials
+        )
+        let lineArr = this._makeOutupLineArr(line,res)
         this.parseState.tplStringArr = []
-        return [true, [line, res]]
+        this.parseState.tplPartials = {}
+        return [true, lineArr]
+
+        // let pre = this.options.annStem + this.options.annRendered
+        // let post = this.options.annStem + this.options.annEndRendered
+        // let res = Mustache.render(
+        //     this.parseState.tplStringArr.join(" "),
+        //     this.definesJson,
+        //     //          this.parseState.tplPartials
+        //   )
+        // if (Reflect.ownKeys(this.parseState.tplPartials).length > 0) {
+        //   res = Mustache.render(
+        //     res, this.definesJson,
+        //     this.parseState.tplPartials
+        //   )
+        // }
+        // this.parseState.tplStringArr = []
+        // this.parseState.tplPartials = {}
+        // let lineArr = [line]
+        //   .concat([pre])
+        //   .concat(res.split('\n'))
+        //   .concat([post])
+        // return [true, lineArr]
       }
       else
-        throw new RppError('expecting symCmdTpl or symCmdRender')
+        throw new RppError(`found ${sym.toString()}, expecting symCmdTpl or symCmdRender`)
     }
-    assert(sym !== symCmdRender, "sym!==symCmdRender")
+    _assert(sym !== symCmdRender, `${sym.toString()}!==symCmdRender`)
     if (sym === symAnnRendered) {
-      assert(!this.parseState.renderedOn, 'renderedOn is already true')
+      _assert(!this.parseState.renderedOn, 'renderedOn is already true')
       this.parseState.renderedOn = true
       return [false, null]
     }
     if (sym === symAnnEndRendered) {
-      assert(this.parseState.renderedOn, 'renderedOn is not true')
+      _assert(this.parseState.renderedOn, 'renderedOn is not true')
       this.parseState.renderedOn = false
       return [false, null]
     }
-    assert(!this.parseState.renderedOn, 'exepected state renderedOn===false ')
+    _assert(!this.parseState.renderedOn, 'exepected state renderedOn===false ')
     if (sym === symAnnPlain) {
       // strip and return line w/out annotation
       return [false, line.substr(offset)]
@@ -232,196 +331,48 @@ class ReversiblePreproc {
       return [false, line]
     }
     if (sym === symCmdEndif) {
-      if (!this.stack.length) {
+      if (!this.parseState.ifStack.length) {
         // too many end scope commnand - like unbalanced parentheses.
         throw new RppError(`unexpected end directive line ${this.linum}, (unbalanced?)`)
       }
       [this.parseState.ifOn, this.parseState.ifOnLinum]
         = this.parseState.ifStack[this.parseState.ifStack.length - 1]
-      this.stack.pop()
+      this.parseState.ifStack.pop()
       return [false, line]
     }
-    throw new RppError('unhandled symbol')
+    throw new RppError(`unhandled symbol ${sym.toString()}`)
     // TODO cases symCmdElif, symCmdElse, symCmdTplRender, symCmdIfTplRender
   }
 
-  // line2(line, callback = null) {
-  //   try {
-  //     this.parseState.linum++ // first line is line 1
-
-  //     let [isCmd, strippedLine, err] = this._parseLine_aux(line)
-
-
-  //     let dbg = ""
-  //     if (this.debugOutput)
-  //       dbg = `[${this.onLinum}, ${this.linum}]`
-  //     let [isCmd, strippedLine, err] = this._parseLine_aux(line)
-  //     if (isCmd) {
-  //       if (this.options.testMode) {
-  //         if (isCmd === 'start') {
-  //           return [
-  //             err,
-  //             dbg = (this.on ? 'true,  ' : 'false, ')
-  //             + `${strippedLine}`
-  //           ]
-  //         } else {
-  //           return [err, null]
-  //         }
-  //       } else {
-  //         if (callback)
-  //           callback(err, (dbg + `${strippedLine}`))
-  //         else
-  //           return [err, (dbg + `${strippedLine}`)]
-  //       }
-  //     } else {
-  //       if (this.options.testMode) {
-  //         if (callback)
-  //           callback(err, null)
-  //         else
-  //           return [err, null]
-  //       }
-  //       if (!this.on) {
-  //         let ret = (dbg
-  //           + this.options.commentMark + this.options.reversibleCommentIndicator
-  //           + `${strippedLine}`)
-  //         if (callback)
-  //           callback(err, ret)
-  //         else
-  //           return [err, ret]
-  //       } else {
-  //         if (callback)
-  //           callback(err, (dbg + `${strippedLine}`))
-  //         else
-  //           return [err, (dbg + `${strippedLine}`)]
-  //       }
-  //     }
-  //   }
-  //   catch (e) {
-  //     if (e instanceof Error) {
-  //       if (callback)
-  //         callback(e, null)
-  //       else
-  //         return [e, null]
-  //     }
-  //     else {
-  //       if (callback)
-  //         callback(new RppError("unknown error: " + e), null)
-  //       else
-  //         return [new RppError("unknown error: " + e), null]
-  //     }
-  //   }
-  // }
-
-  _parseLine_aux(line) {
-    if (line.slice(0, 2) !== this.options.commentMark)
-      return [false, line, null]
-    let stripTarget = this.options.commentMark + this.options.reversibleCommentIndicator
-    // each line is always stripped of any previously inserted preproc comments
-    if (line.slice(0, stripTarget.length) === stripTarget) {
-      line = line.slice(stripTarget.length)
-      return [false, line, null]
-    }
-    let kind = { start: false, end: false }
-    let i0 = line.indexOf('if<<')
-    if (i0 == -1) {
-      i0 = line.indexOf('<<')
-      if (i0 == -1)
-        return [false, line, null]
-      i0 += 2
-      kind.end = true
-    } else {
-      i0 += 4
-      kind.start = true
-    }
-    let i1 = line.slice(i0).indexOf('>>')
-    if (i1 == -1)
-      return [false, line, null]
-    i1 += i0
-    let sub = line.slice(i0, i1)
-    if (kind.end) {
-      if (!this.stack.length) {
-        // too many end scope commnand - like unbalanced parentheses.
-        // Let's be strict.
-        let err = new RppError(`unexpected end directive line ${this.linum}, (unbalanced?)`)
-        return [true, line, err]
-      }
-      this.on = this.stack[this.stack.length - 1][0]
-      this.onLinum = this.stack[this.stack.length - 1][1]
-      this.stack.pop()
-      return ['end', line, null]
-    } else { // kind.start===true
-      if (!kind.start) throw new RppError("programming error")
-      let [isOn, err] = judgeLineArg(sub, this.definesJson, this.jsepPreprocInterpret)
-      this.stack.push([this.on, this.onLinum]) // save the previous state
-      this.on = isOn
-      this.onLinum = this.linum
-      return ['start', line, err]
-    }
-  }
-  line(line, callback = null) {
+  line(line, pushLineOut = null, callback = (e, x) => { return [e, x] }) {
     try {
-      this.linum++ // first line is line 1
-      //console.log(
-      //    `this.linenum=${this.linum}, this.stack.length=${this.stack.length}, line=${line}`)
-      let dbg = ""
-      if (this.debugOutput)
-        dbg = `[${this.onLinum}, ${this.linum}]`
-      let [isCmd, strippedLine, err] = this._parseLine_aux(line)
-      if (isCmd) {
-        if (this.options.testMode) {
-          if (isCmd === 'start') {
-            return [
-              err,
-              dbg = (this.on ? 'true,  ' : 'false, ')
-              + `${strippedLine}`
-            ]
-          } else {
-            return [err, null]
-          }
-        } else {
-          if (callback)
-            callback(err, (dbg + `${strippedLine}`))
-          else
-            return [err, (dbg + `${strippedLine}`)]
-        }
-      } else {
-        if (this.options.testMode) {
-          if (callback)
-            callback(err, null)
-          else
-            return [err, null]
-        }
-        if (!this.on) {
-          let ret = (dbg
-            + this.options.commentMark + this.options.reversibleCommentIndicator
-            + `${strippedLine}`)
-          if (callback)
-            callback(err, ret)
-          else
-            return [err, ret]
-        } else {
-          if (callback)
-            callback(err, (dbg + `${strippedLine}`))
-          else
-            return [err, (dbg + `${strippedLine}`)]
-        }
+      this.parseState.linum++ // first line is line 1
+      let callbackLineout = null
+      let [multi, strippedLine] = this._parseLine_aux2(line)
+      if (!multi) {
+        if (pushLineOut)
+          pushLineOut(strippedLine)
+        else
+          callbackLineout = strippedLine
       }
+      else {
+        if (!pushLineOut)
+          throw RppError
+            // eslint-disable-next-line no-unexpected-multiline
+            ('pushLineOut must be defined to enable multiple line output (i.e. templates)')
+        for (let item of strippedLine)
+          pushLineOut(item)
+      }
+      return callback(null, callbackLineout)
     }
     catch (e) {
       if (e instanceof Error) {
-        if (callback)
-          callback(e, null)
-        else
-          return [e, null]
-      }
-      else {
-        if (callback)
-          callback(new RppError("unknown error: " + e), null)
-        else
-          return [new RppError("unknown error: " + e), null]
+        return callback(e, null)
+      } else {
+        return callback(new RppError("unknown error: " + e), null)
       }
     }
   }
-}
+} // class ReversiblePreproc
 
 export default ReversiblePreproc
