@@ -3,8 +3,8 @@
 import JsepPreprocInterpret from './jsep-preproc-interpret.mjs'
 import RppBaseError from './prependable-error.mjs'
 import Mustache from 'mustache'
-import dedent from 'dedent'
-import jsep from 'jsep'
+//import dedent from 'dedent'
+//import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
 // globally disable all Mustache escaping 
@@ -23,12 +23,16 @@ function _assert(cond, msg) {
 }
 
 
+function hasOwnKey(obj,key) {
+  return Reflect.getOwnPropertyDescriptor(obj,key) !== undefined
+}
+
 var defaultOptions = {
   testMode: false, // cmd start lines only prepended by true or false
   debugOutput: false,
   // 1.x.x obsolete
-//  commentMark: '//',
-//  reversibleCommentIndicator: '!!',
+  //  commentMark: '//',
+  //  reversibleCommentIndicator: '!!',
   // 2.x.x
   // cmdStemMulti(StartEnd) used for 
   //    
@@ -134,6 +138,7 @@ const symAnnPlain = Symbol('annPlain')
 const symAnnRendered = Symbol('annRendered')
 const symAnnEndRendered = Symbol('annEndRendered')
 
+
 class ReversiblePreproc {
   constructor(definesJson = {}, options = defaultOptions) {
     for (let k of Reflect.ownKeys(defaultOptions))
@@ -198,10 +203,27 @@ class ReversiblePreproc {
     Object.seal(this)
   }
 
-  static _renderMustache(tpl, defines, partials = null) {
-    // we might want to enable recursive rendering in the future
-    let res = Mustache.render(tpl, defines)
-    if (partials && Reflect.ownKeys(partials).length > 0) {
+  static _parseMacroCall(mcall) {
+    var fnNameRegex = /^[[$A-Z_][0-9A-Z_$]*/i
+    mcall = mcall.trim()
+    let macroName = mcall.match(fnNameRegex)[0]
+    let rem = mcall.substr(macroName.length).trim()
+    let sepchar = rem[0]
+    let args = rem.slice(1).split(sepchar)
+    let partials = {}
+    let n = 0
+    for (let arg of args) {
+      partials[Number(n).toString()] = arg.trim()
+      n++
+    }
+    return [macroName, partials]
+  }
+
+  static _renderMustache(tpl, defines, partials = {}) {
+    // to allow for multi-level and recursive substitutions, loop until no more change
+    let resPrev = null, res = tpl
+    while (res !== resPrev) {
+      resPrev = res
       res = Mustache.render(res, defines, partials)
     }
     return res
@@ -240,10 +262,10 @@ class ReversiblePreproc {
     }
     if (sym === symCmdAddDef) {
       let subs = line.substr(offset)
-      let lhs = subs.trimLeft().split(/\s+/g,1)
+      let lhs = subs.trimLeft().split(/\s+/g, 1)
       _assert(lhs && lhs instanceof Array && lhs.length,
         `lhs ${lhs} parse error - 1`)
-      lhs=lhs[0]
+      lhs = lhs[0]
       _assert(lhs.length,
         `lhs ${lhs} parse error - 2`)
       let members = lhs.split('.')
@@ -262,32 +284,11 @@ class ReversiblePreproc {
       return [false, line]
     }
     if (sym === symCmdMacro) {
-      let atp = jsep(line.substr(offset))
-      _assert(atp.type === 'CallExpression'
-        && atp.callee.type === 'Identifier',
-        'macro parse error')
-      // macro name
-      _assert(this.definesJson[atp.callee.name],
-        `no macro ${atp.callee.name} found in defines`)
-      let tpl = this.definesJson[atp.callee.name]
-      // setup partials
-      let partials = {}
-      for (let n = 0; n < atp.arguments.length; n++) {
-        let arg = atp.arguments[n]
-        _assert(['Identifier', 'Literal'].includes(arg.type),
-          'macro arg parse error')
-        if (arg.type === 'Literal') {
-          partials[Number.toString(n)] = arg.raw
-        } else if (arg.type === 'Identifier') {
-          _assert(Reflect.ownKeys(this.definesJson).includes(arg.name),
-            `macro arg unquoted identifier not found in defines: ${arg.name}`)
-          partials[Number.toString(n)] = JSON.stringify(this.definesJson)
-        } else {
-          throw new RppError(
-            dedent`macro arg ${JSON.stringify(arg)} parse error, 
-            type unknow: ${arg.type}`)
-        }
-      }
+      let [macroName, partials] =
+        ReversiblePreproc._parseMacroCall(line.substr(offset))
+      _assert(hasOwnKey(this.definesJson,macroName))
+      let tpl = this.definesJson[macroName]
+      _assert(typeof tpl === 'string')
       let res = ReversiblePreproc._renderMustache(
         tpl, this.definesJson, partials)
       let lineArr = this._makeOutupLineArr(line, res)
