@@ -23,8 +23,8 @@ function _assert(cond, msg) {
 }
 
 
-function hasOwnKey(obj,key) {
-  return Reflect.getOwnPropertyDescriptor(obj,key) !== undefined
+function hasOwnKey(obj, key) {
+  return Reflect.getOwnPropertyDescriptor(obj, key) !== undefined
 }
 
 var defaultOptions = {
@@ -40,6 +40,8 @@ var defaultOptions = {
   cmdStemMultiEnd: '--*/',
   cmdStem: '//--',
   cmdAddDef: 'addDef',
+  cmdAddDefJson: 'addDefJson',
+  cmdAddDefEval: 'addDefEval',
   cmdIf: 'if',
   cmdElse: 'else',
   cmdElif: 'elif',
@@ -123,6 +125,8 @@ const reservedIdentifiers = [
 ]
 
 const symCmdAddDef = Symbol('cmdAddDef')
+const symCmdAddDefJson = Symbol('cmdAddDefJson')
+const symCmdAddDefEval = Symbol('cmdAddDefEval')
 const symCmdIf = Symbol('cmdIf')
 const symCmdElse = Symbol('cmdElse')
 const symCmdElif = Symbol('cmdElif')
@@ -176,6 +180,8 @@ class ReversiblePreproc {
     }
     this.cmdsSorted = [
       [options.cmdAddDef, symCmdAddDef],
+      [options.cmdAddDefJson, symCmdAddDefJson],
+      [options.cmdAddDefEval, symCmdAddDefEval],
       [options.cmdIf, symCmdIf],
       [options.cmdElse, symCmdElse],
       [options.cmdElif, symCmdElif],
@@ -193,12 +199,12 @@ class ReversiblePreproc {
       [options.annEndRendered, symAnnEndRendered],
     ]
     this.cmdsSorted.sort((a, b) => {
-      (a.length > b.length) ? 1 :
-        (a.length < b.length) ? -1 : 0
+      return (a[0].length < b[0].length) ? 1 :
+        (a[0].length > b[0].length) ? -1 : 0
     })
     this.annsSorted.sort((a, b) => {
-      (a.length > b.length) ? 1 :
-        (a.length < b.length) ? -1 : 0
+      return (a[0].length < b[0].length) ? 1 :
+        (a[0].length > b[0].length) ? -1 : 0
     })
     Object.seal(this)
   }
@@ -260,7 +266,9 @@ class ReversiblePreproc {
       } else
         return [false, line]
     }
-    if (sym === symCmdAddDef) {
+    if (sym === symCmdAddDef
+      || sym === symCmdAddDefJson
+      || sym === symCmdAddDefEval) {
       let subs = line.substr(offset)
       let lhs = subs.trimLeft().split(/\s+/g, 1)
       _assert(lhs && lhs instanceof Array && lhs.length,
@@ -280,13 +288,22 @@ class ReversiblePreproc {
         parent = parent[n]
       }
       let tpl = subs.substring(lhs.length).trimLeft()
-      parent[members.slice(-1)] = tpl
+      let val = tpl
+      switch (sym) {
+        case symCmdAddDefJson:
+          val = JSON.parse(tpl)
+          break
+        case symCmdAddDefEval:
+          val = (() => { return eval(tpl) })()
+          break
+      }
+      parent[members.slice(-1)] = val
       return [false, line]
     }
     if (sym === symCmdMacro) {
       let [macroName, partials] =
         ReversiblePreproc._parseMacroCall(line.substr(offset))
-      _assert(hasOwnKey(this.definesJson,macroName))
+      _assert(hasOwnKey(this.definesJson, macroName))
       let tpl = this.definesJson[macroName]
       _assert(typeof tpl === 'string')
       let res = ReversiblePreproc._renderMustache(
@@ -308,7 +325,7 @@ class ReversiblePreproc {
       // only more tpl string or render cmd are allowed
       if (sym === symCmdRender) {
         let res = ReversiblePreproc._renderMustache(
-          this.parseState.tplStringArr.join(" "),
+          this.parseState.tplStringArr.join("\n"),
           this.definesJson,
           this.parseState.tplPartials
         )
