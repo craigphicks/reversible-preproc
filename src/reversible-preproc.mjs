@@ -30,6 +30,7 @@ function hasOwnKey(obj, key) {
 var defaultOptions = {
   testMode: false, // cmd start lines only prepended by true or false
   debugOutput: false,
+  eol: '\n',
   // 1.x.x obsolete
   //  commentMark: '//',
   //  reversibleCommentIndicator: '!!',
@@ -235,12 +236,18 @@ class ReversiblePreproc {
     return res
   }
 
+  _eol() { return this.options.eol }
   _makeOutupLineArr(line, res) {
-    let pre = this.options.annStem + this.options.annRendered
-    let post = this.options.annStem + this.options.annEndRendered
+    _assert(typeof res === 'string')
+    let pre =
+      this.options.annStem + this.options.annRendered
+    let post =
+      this.options.annStem + this.options.annEndRendered
+    // the "post" line needs to be on a new line - enforce that
+    // in case the rendered output doesnt
     let lineArr = [line]
       .concat([pre])
-      .concat(res.split('\n'))
+      .concat([res]) // line ends within res are responsibility of tpl etc.
       .concat([post])
     return lineArr
   }
@@ -398,24 +405,43 @@ class ReversiblePreproc {
     // TODO cases symCmdElif, symCmdElse, symCmdTplRender, symCmdIfTplRender
   }
 
-  line(line, pushLineOut = null, callback = (e, x) => { return [e, x] }) {
+  _ensureEol(line){
+    _assert(typeof line ==='string')
+    if (line.length < this._eol().length 
+    || line.slice(-1*this._eol().length)!==this._eol()){
+      return line+this._eol()
+    }
+    return line
+  }
+  _removeAnyEol(line){
+    if (line.length>=2 && line.slice(-2)==='\r\n')
+      return line.slice(0,-2)
+    if (line.length>=1 && line.slice(-1)==='\n')
+      return line.slice(0,-1)
+    return line
+  }
+  line(line, pushOut = null, callback = (e, x) => { return [e, x] }) {
     try {
+      line = this._removeAnyEol(line) // in case input EOL !== output EOL
       this.parseState.linum++ // first line is line 1
       let callbackLineout = null
       let [multi, strippedLine] = this._parseLine_aux2(line)
       if (!multi) {
-        if (pushLineOut)
-          pushLineOut(strippedLine)
+        let lineOut = this._ensureEol(strippedLine)
+        if (pushOut)
+          pushOut(lineOut)
         else
-          callbackLineout = strippedLine
+          callbackLineout = lineOut // back compat only, for v1.x.x tests 
       }
       else {
-        if (!pushLineOut)
+        if (!pushOut)
           throw RppError
             // eslint-disable-next-line no-unexpected-multiline
-            ('pushLineOut must be defined to enable multiple line output (i.e. templates)')
-        for (let item of strippedLine)
-          pushLineOut(item)
+            ('pushOut must be defined to enable multiple line output (i.e. templates)')
+        for (let item of strippedLine){
+          let lineOut = this._ensureEol(item)
+          pushOut(lineOut)
+        }
       }
       return callback(null, callbackLineout)
     }
