@@ -299,6 +299,56 @@ class ReversiblePreproc {
     return lineArr
   }
 
+
+  _processMultiLineCmd() {
+    
+  }
+
+  // return an array of lines to be output
+  _procSingleNonCmdLine(line, wsOff) {
+    if (wsOff>=0 && isSubstrEqual(line, wsOff, this.options.annStem)) {
+      let annline = line.substr(wsOff + this.options.annStem.length)
+      let [sym,length]=[null,0]
+      for (let item of this.options.annsSorted){
+        if (isSubstrEqual(annline, 0, item[0])){
+          sym = item[1]
+          length = item[0].length
+        }
+      }
+      if (!sym)
+        throw new RppError('ann command not found')
+      switch (sym) {
+        case symAnnRendered:
+          this.parseState.renderedOn = true
+          return [ line ]
+        case symAnnEndRendered:
+          _assert(this.parseState.renderedOn, "this.parseState.renderedOn")
+          this.parseState.renderedOn = false
+          return [ line ] 
+        case symAnnPlain:
+          // remove annotation from line and drop down to plain line behavior
+          line = annline.substr(wsOff + this.optionts.annStem.length + length + 1)
+          break
+        default:
+          throw new RppError(`unknown symbol ${sym}`)
+      }
+
+    }
+    // no symbols to check for - handle states and plain lines
+    if (this.parseState.renderedOn)
+      return null // the line is progmatic, remove it
+    if (this.parseState.ifOnLinum){
+      // 'if' command inner region
+      if (this.parse.ifOn){
+        return [ line ]
+      } else {
+        return [ this.options.annStem + this.options.annPlain + " " + line ]
+      }
+    } 
+    // no special states
+    return [ line ]
+  }
+
   _parseLine_aux2(line) { // can throw, returns [isCmd, strippedLine / null ]
     // if ps 
     let [sym, offset] = getLineHeadSymbol(line, this.options, this.cmdsSorted, this.annsSorted)
@@ -521,7 +571,7 @@ class ReversiblePreproc {
       }
       if (this.parseStart.multiLine.endDetected) {
         // process accumulated command lines and return result
-        let lineOutArr = _processMultiLineCmd()
+        let lineOutArr = this._processMultiLineCmd(line)
         _assert(pushOut || lineOutArr.length <= 1)
         if (!pushOut) {
           // older tests need back compat
@@ -535,6 +585,12 @@ class ReversiblePreproc {
           return callback(null, null)
         }
       } // if (this.parseStart.multiLine.endDetected)
+
+      // all that left now are other-than-commands
+      {
+        let [multiOut, lineData] = _this._procSingleNonCmdLine(line)
+
+      }
     } // try
     catch (e) {
       if (e instanceof Error) {
