@@ -19,7 +19,7 @@ class RppError extends RppBaseError {
 // _assert with an underbar 
 function _assert(cond, msg) {
   if (!cond)
-    throw new RppError(msg)
+    throw new RppError(msg ? msg : 'assertion failed')
 }
 
 
@@ -64,42 +64,17 @@ function forcePropertyValue(obj, keys, value) {
 }
 
 
-// function forcePropertyValue(obj, keys, value) {
-//   _assert(keys && keys.length > 0, 'keys null or empty')
-//   if (!hasOwnKey(obj, keys[0]))
-//     obj[keys[0]] = {}
-//   let parent = obj
-//   for (let n = 1; n < keys.length - 1; n++) {
-//     if (!hasOwnKey(parent[keys[n - 1]], keys[n]))
-//       parent[keys[n - 1]][keys[n]] = null
-//     parent = parent[keys[n - 1]]
-//   }
-//   parent[keys.slice(-1)] = value
-// }
-
-function lookupPropertyValue(obj, keys) {
-  _assert(keys && keys.length > 0, 'keys null or empty')
-  //_assert(hasOwnKey(obj, keys[0], `key ${keys[0]} not present`))
-  let parent = obj
-  for (let n = 0; n < keys.length; n++) {
-    _assert(typeof parent === 'object',
-      `must be type "object" not ${typeof parent}`)
-    _assert(hasOwnKey(parent, keys[n], `key ${keys[n]} not present`))
-    parent = parent[keys[n]]
-  }
-  return parent
-}
 // function lookupPropertyValue(obj, keys) {
 //   _assert(keys && keys.length > 0, 'keys null or empty')
-//   _assert(hasOwnKey(obj, keys[0], `key ${keys[0]} not present`))
 //   let parent = obj
-//   for (let n = 1; n < keys.length - 1; n++) {
-//     _assert(hasOwnKey(parent[keys[n - 1]], keys[n]))
-//     parent = parent[keys[n - 1]]
+//   for (let n = 0; n < keys.length; n++) {
+//     _assert(typeof parent === 'object',
+//       `must be type "object" not ${typeof parent}`)
+//     _assert(hasOwnKey(parent, keys[n], `key ${keys[n]} not present`))
+//     parent = parent[keys[n]]
 //   }
-//   return parent[keys.slice(-1)]
+//   return parent
 // }
-
 
 var defaultOptions = {
   testMode: false, // cmd start lines only prepended by true or false
@@ -118,15 +93,16 @@ var defaultOptions = {
   cmdAddDefJson: 'addDefJson',
   cmdAddDefEval: 'addDefEval',
   cmdIf: 'if',
-  cmdElse: 'else',
-  cmdElif: 'elif',
+  cmdIfEval: 'ifEval',
+  // cmdElse: 'else',
+  // cmdElif: 'elif',
   cmdEndif: 'endif',
   cmdMacro: 'macro',
   cmdTpl: 'tpl',
   cmdRender: 'render',
   cmdPartials: 'partials',
-  cmdTplRender: 'tplRender', // in a single line
-  cmdIfTplRender: 'ifTplRender', // in a single line
+  // cmdTplRender: 'tplRender', // in a single line
+  // cmdIfTplRender: 'ifTplRender', // in a single line
   annPlain: 'plain',
   annRendered: 'rendered',
   annEndRendered: 'endRendered',
@@ -144,105 +120,64 @@ const symCmdAddDef = Symbol('cmdAddDef')
 const symCmdAddDefJson = Symbol('cmdAddDefJson')
 const symCmdAddDefEval = Symbol('cmdAddDefEval')
 const symCmdIf = Symbol('cmdIf')
-const symCmdElse = Symbol('cmdElse')
-const symCmdElif = Symbol('cmdElif')
+const symCmdIfEval = Symbol('cmdIfEval')
+// const symCmdElse = Symbol('cmdElse')
+// const symCmdElif = Symbol('cmdElif')
 const symCmdEndif = Symbol('cmdEndif')
-const symCmdMacro = Symbol('cmdMacro')
+// const symCmdMacro = Symbol('cmdMacro')
 const symCmdTpl = Symbol('cmdTpl')
 const symCmdPartials = Symbol('cmdPartials')
 const symCmdRender = Symbol('cmdRender')
-const symCmdTplRender = Symbol('cmdTplRender')
-const symCmdIfTplRender = Symbol('cmdIfTplRender')
+// const symCmdTplRender = Symbol('cmdTplRender')
+// const symCmdIfTplRender = Symbol('cmdIfTplRender')
 
 const symAnnPlain = Symbol('annPlain')
 const symAnnRendered = Symbol('annRendered')
 const symAnnEndRendered = Symbol('annEndRendered')
 
-function makeNonCryptoRandomAlphaNumString(length) {
-  function tf(n) {
-    if (n < 26) return 65 + n
-    else if (n < 52) return 97 + n - 26
-    else return 48 + n - 52
-  }
-  var result = ''
-  for (var i = 0; i < length; i++) {
-    let idx = Math.floor(Math.random() * 62)
-    result += String.fromCharCode(tf(idx))
-  }
-  return result
-}
+// function makeNonCryptoRandomAlphaNumString(length) {
+//   function tf(n) {
+//     if (n < 26) return 65 + n
+//     else if (n < 52) return 97 + n - 26
+//     else return 48 + n - 52
+//   }
+//   var result = ''
+//   for (var i = 0; i < length; i++) {
+//     let idx = Math.floor(Math.random() * 62)
+//     result += String.fromCharCode(tf(idx))
+//   }
+//   return result
+// }
 
 function isSubstrEqual(line, offset, str) {
   return line.substr(offset, str.length) === str
 }
 
-// function getLineHeadSymbol(line, opt, arrCmd, arrAnn, multiLineIn) {
-//   function testLineHead(line, start, str) {
-//     //return line.substr(start, str.length) === str
-//     return isSubstrEqual(line, start, str)
-//   }
-//   // input is a single line no EOL
-//   let wsOff = line.search(/\S/)
-//   if (!multiLineIn.cmdSym) {
-//     // scan first for multiline cmd start
-//     if (testLineHead(line, wsOff, opt.cmdStemMultiStart)) {
-//       let start = wsOff + opt.cmdStem.length
-//       // check if cmdStemMultiEnd exists in same line
-//       let substr = line.slice(start)
-//       let idxEnd = line.substr(start).indexOf(opt.cmdStemMultiEnd)
-//       if (idxEnd >= 0) {
-//         substr.line.slice(start, idxEnd)
-//       } else {
-//         // end should come on a later line
-//       }
-//       for (let item of arrCmd) {
-//         if (testLineHead(substr, 0, item[0]))
-//           if (idxEnd > 0) {
-//             // same as single line cmd
-//             return [item[1], start + item[0].length + 1]
-//           } else {
-//             multiLineIn.cmdSym = item[1]
-//             multiLineIn.lines.push([line, start + item[0].length + 1])
-//             return [symMultiIn, null]
-//           }
-//       }
-//       throw new RppError(`no known command found after stem in ${line}`)
-//     } // if testLineHead(line, wsOff, opt.cmdStemMultiStart)
-//   } else { // multiLineIn.cmdSym !== null
-//     // do not check for line head command, only check for end.
-//     let idxEnd = line.indexOf(opt.cmdStemMultiEnd)
-//     // first add any data before end
-//     multiLineIn.lines.push([line, 0, idxEnd]) // if 3rd el isn't present assume whole line
-//     return [symMultiInEnd, null]
-//   }
-//   if (wsOff == -1)
-//     return [null, null] // empty line 
-//   if (testLineHead(line, wsOff, opt.cmdStem)) {
-//     //
-//     let start = wsOff + opt.cmdStem.length
-//     for (let item of arrCmd) {
-//       if (testLineHead(line, start, item[0]))
-//         return [item[1], start + item[0].length + 1]
-//     }
-//     throw new RppError(`no command found after stem in ${line}`)
-//   } else if (testLineHead(line, wsOff, opt.annStem)) {
-//     //
-//     let start = wsOff + opt.annStem.length
-//     for (let item of arrAnn) {
-//       if (testLineHead(line, start, item[0]))
-//         return [item[1], start + item[0].length + 1]
-//     }
-//     throw new RppError(`no annotation found after stem in ${line}`)
-//   } else
-//     return [null, null] // not command or annotated line
-// }
-
-
 
 function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
-  if (definesJson === '*') // this overrides and (and prevents calling of) any eval functions
-    return [true, null]
-  if (str[0] === ':') { // semicolon indicates to start a function to be eval'd
+  // if (definesJson === '*') // this overrides and (and prevents calling of) any eval functions
+  //   return [true, null]
+  if (jsepPreprocInterpret === null) {
+    try {
+      //
+      // str is taken as the body of the function
+      // in which "defines" refers to the RversiblePreproc 'defines' object.
+      let body = '"use strict"\n' + str
+      let f = new Function('defines', body)
+      let res = f(definesJson) ? true : false
+      return [res, null]
+    }
+    catch (e) {
+      return [
+        false,
+        new RppError(
+          `failed to eval IfEval condition: `, e)
+      ]
+    }
+  }
+  else if (str[0] === ':') {
+    // TODO - DELETE THIS case 
+    // semicolon indicates to start a function to be eval'd
     // the form is
     // :(<variableName>)=>(<body>) and it be eval'd as a function
     // ((<variableName>)=>(<body>))(<preproc jsonDefines>)
@@ -271,17 +206,12 @@ function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
   }
 }
 
-
-
-
 class ReversiblePreproc {
   constructor(definesJson = {}, options = defaultOptions) {
     for (let k of Reflect.ownKeys(defaultOptions))
       if (!Reflect.ownKeys(options).includes(k))
         options[k] = defaultOptions[k]
     this.options = options
-    // if (!this.options.commentMark.length)
-    //   throw new RppError("options.commentMark cannot be zero length")
     {
       if (typeof definesJson === 'object') {
         if (definesJson instanceof Array)
@@ -294,13 +224,9 @@ class ReversiblePreproc {
       }
       this.definesJson = definesJson
     }
-    this.definesJson.EOL = options.eol
+    //this.definesJson.EOL = options.eol
     this.jsepPreprocInterpret = new JsepPreprocInterpret(definesJson)
     this.linum = -1
-    //    this.onLinum = -1
-    //    this.on = 1
-    //    this.stack = []
-    // 2.x.x 
     this.parseState = {
       linum: 0, // line number of the input file (count starts at 1)
       ifOnLinum: -1, // the input line number of current innermost if block start
@@ -320,15 +246,16 @@ class ReversiblePreproc {
       [options.cmdAddDefJson, symCmdAddDefJson],
       [options.cmdAddDefEval, symCmdAddDefEval],
       [options.cmdIf, symCmdIf],
-      [options.cmdElse, symCmdElse],
-      [options.cmdElif, symCmdElif],
+      [options.cmdIfEval, symCmdIfEval],
+      // [options.cmdElse, symCmdElse],
+      // [options.cmdElif, symCmdElif],
       [options.cmdEndif, symCmdEndif],
-      [options.cmdMacro, symCmdMacro],
+      // [options.cmdMacro, symCmdMacro],
       [options.cmdTpl, symCmdTpl],
       [options.cmdPartials, symCmdPartials],
       [options.cmdRender, symCmdRender],
-      [options.cmdTplRender, symCmdTplRender],
-      [options.cmdIfTplRender, symCmdIfTplRender],
+      // [options.cmdTplRender, symCmdTplRender],
+      // [options.cmdIfTplRender, symCmdIfTplRender],
     ]
     this.annsSorted = [
       [options.annPlain, symAnnPlain],
@@ -345,45 +272,45 @@ class ReversiblePreproc {
     })
     Object.seal(this)
   }
-  static _parseMacroArgs(margs,defines) {
-    // each partial prop has sub props :
-    // value: type string or type array 
-    // flags: "", "d", or "ad"    
-    let argDataArr = []
-    let reres = /[^ \t]/.exec(margs)
-    if (reres) {
-      let delim = reres[0][0]
-      let arr = margs.substr(reres.index+1).split(delim)
-      let n = 0
-      for (let arg of arr) {
-        //let flagres = /^( |d |ad |da )/.exec(arg)
-        let flags = ''
-        let flagres = /^[^ /t]*/.exec(arr)
-        if (flagres) {
-          _assert(/^[ad]*$/.test(flagres[0]))
-          _assert(flagres[0].length < arg.length + 1,
-            `malformed arg ${arg}`)
-          flags = flagres[0]
-          arg = arg.slice(flagres[0].length)
-        }
-        let value = null
-        if (flags.includes('d')) {
-          // the argument is an identifier for defines, retrieve value
-          // must be at least one whitespace after
-          let idres = matchNextIdentifier(arg)
-          value = lookupPropertyValue(defines, idres.keys)
-        } else {
-          _assert(['\t', ' '].includes(arg[0]),
-            'whitespace must follow delimiter')
-          value = arg.slice(1)
-        }
-        let prop = '$' + Number(n).toString()
-        argDataArr[n] = { name: prop, value: value, flags: flags }
-        n++
-      }
-    }
-    return argDataArr
-  }
+  // static _parseMacroArgs(margs,defines) {
+  //   // each partial prop has sub props :
+  //   // value: type string or type array 
+  //   // flags: "", "d", or "ad"    
+  //   let argDataArr = []
+  //   let reres = /[^ \t]/.exec(margs)
+  //   if (reres) {
+  //     let delim = reres[0][0]
+  //     let arr = margs.substr(reres.index+1).split(delim)
+  //     let n = 0
+  //     for (let arg of arr) {
+  //       //let flagres = /^( |d |ad |da )/.exec(arg)
+  //       let flags = ''
+  //       let flagres = /^[^ /t]*/.exec(arr)
+  //       if (flagres) {
+  //         _assert(/^[ad]*$/.test(flagres[0]))
+  //         _assert(flagres[0].length < arg.length + 1,
+  //           `malformed arg ${arg}`)
+  //         flags = flagres[0]
+  //         arg = arg.slice(flagres[0].length)
+  //       }
+  //       let value = null
+  //       if (flags.includes('d')) {
+  //         // the argument is an identifier for defines, retrieve value
+  //         // must be at least one whitespace after
+  //         let idres = matchNextIdentifier(arg)
+  //         value = lookupPropertyValue(defines, idres.keys)
+  //       } else {
+  //         _assert(['\t', ' '].includes(arg[0]),
+  //           'whitespace must follow delimiter')
+  //         value = arg.slice(1)
+  //       }
+  //       let prop = '$' + Number(n).toString()
+  //       argDataArr[n] = { name: prop, value: value, flags: flags }
+  //       n++
+  //     }
+  //   }
+  //   return argDataArr
+  // }
 
   // static _parseMacroCall(mcall) {
   //   mcall = mcall.trim()
@@ -400,17 +327,17 @@ class ReversiblePreproc {
   //   return [macroName, partials]
   // }
 
-  static _renderMustache_maxIterDefault(){return 1000}
-  static _renderMustache(tpl, defines, partials = {}, 
-    maxIter=ReversiblePreproc._renderMustache_maxIterDefault()) {
+  static _renderMustache_maxIterDefault() { return 1000 }
+  static _renderMustache(tpl, defines, partials = {},
+    maxIter = ReversiblePreproc._renderMustache_maxIterDefault()) {
     // to allow for multi-level and recursive substitutions, loop until no more change
     let resPrev = null, res = tpl
     let iter = 0
-    for (;res !== resPrev && iter<maxIter; iter++) {
+    for (; res !== resPrev && iter < maxIter; iter++) {
       resPrev = res
       res = Mustache.render(res, defines, partials)
     }
-    if (iter==ReversiblePreproc._renderMustache_maxIterDefault){
+    if (iter == ReversiblePreproc._renderMustache_maxIterDefault) {
       throw new RppError('too many Mustache iterations')
     }
     return res
@@ -439,7 +366,7 @@ class ReversiblePreproc {
     if (/[^ /t]/.test(line))
       ret = line + this._eol()
     for (let l of arrLines)
-      ret += (l[0].substr(l[1],l[2]) + this._eol())
+      ret += (l[0].substr(l[1], l[2]) + this._eol())
     return this._removeFinalEol(ret)
   }
 
@@ -474,19 +401,7 @@ class ReversiblePreproc {
     }
 
     forcePropertyValue(this.definesJson, lhsRes.keys, val)
-
-    // let members = lhs.split('.')
-    // if (!Reflect.ownKeys(this.definesJson).includes(members[0]))
-    //   this.definesJson[members[0]] = null
-    // let parent = this.definesJson
-    // for (let i = 0; i < members.length - 1; i++) {
-    //   let m = members[i]
-    //   let n = members[i + 1]
-    //   if (!Reflect.ownKeys(parent[n]).includes(m))
-    //     parent[n][m] = null
-    //   parent = parent[n]
-    // }
-    // parent[members.slice(-1)] = val
+    return
   }
 
 
@@ -502,11 +417,13 @@ class ReversiblePreproc {
         this._processMultiLineCmd_addDef(sym, lines)
         return null
       case symCmdIf:
+      case symCmdIfEval:
         {
           let [isOn, err] = judgeLineArg(
             lines.join(this._eol()),
             this.definesJson,
-            this.jsepPreprocInterpret)
+            (sym === symCmdIf ? this.jsepPreprocInterpret : null)
+          )
           if (err) throw new RppError('judgeLineArg error: ' + err)
           // save the previous state 
           this.parseState.ifStack.push([this.parseState.ifOn, this.parseState.ifOnLinum])
@@ -553,63 +470,63 @@ class ReversiblePreproc {
           this.parseState.tplPartials = {}
           return lineArr
         }
-      case symCmdMacro:
-        {
-          let lhsRes = matchNextIdentifier(lines[0])
+      //      case symCmdMacro:
+      // {
+      //   let lhsRes = matchNextIdentifier(lines[0])
 
 
-          // let identRegexp = createIdentifierRegex()
-          // let reRes0 = identRegexp.exec(lines[0])
-          // if (!reRes0)
-          //   throw new RppError('macro identifier not found')
-          // let lhs = reRes0[0] // expecting it to be top level - TODO allow dots
+      //   // let identRegexp = createIdentifierRegex()
+      //   // let reRes0 = identRegexp.exec(lines[0])
+      //   // if (!reRes0)
+      //   //   throw new RppError('macro identifier not found')
+      //   // let lhs = reRes0[0] // expecting it to be top level - TODO allow dots
 
-          let rhs = this._arrLinesToStrSpecial(
-            lines[0].substr(lhsRes.index + lhsRes.identifier.length),
-            lines.slice(1)
-          )
-          let partialsData = ReversiblePreproc._parseMacroArgs(
-            rhs, this.definesJson)
-          //let tpl = this.definesJson['macro'][lhs]
-          let tpl = lookupPropertyValue(this.definesJson, lhsRes.keys)
-          _assert(tpl !== undefined,
-            `property "${lhsRes.identifier}" not present in defines`)
-          _assert(typeof tpl === 'string',
-            `value of property ${lhsRes.identifier} not of type string`)
+      //   let rhs = this._arrLinesToStrSpecial(
+      //     lines[0].substr(lhsRes.index + lhsRes.identifier.length),
+      //     lines.slice(1)
+      //   )
+      //   let partialsData = ReversiblePreproc._parseMacroArgs(
+      //     rhs, this.definesJson)
+      //   //let tpl = this.definesJson['macro'][lhs]
+      //   let tpl = lookupPropertyValue(this.definesJson, lhsRes.keys)
+      //   _assert(tpl !== undefined,
+      //     `property "${lhsRes.identifier}" not present in defines`)
+      //   _assert(typeof tpl === 'string',
+      //     `value of property ${lhsRes.identifier} not of type string`)
 
-          // for each of the partialsData, check for flag 'a',
-          // and if found found substitute array format {{#X}}{{.}}{{/X}}
-          // where X is a temporary variable name which doesn't conflict
-          let tmpTpl = tpl
-          let partials = {}
-          for (let d of partialsData) {
-            if (d.flags.indexOf('a') >= 0) {
-              _assert(d.value instanceof Array)
-              let randId = makeNonCryptoRandomAlphaNumString(6)
-              // let obj = { [randId]: '' }
-              // let arrTpl = `{{#${randId}}}{{.}}{{/${randId}}}`
-              // sub {{.}} <- {{<$[n]}}
-              tmpTpl = ReversiblePreproc._renderMustache(
-                tmpTpl, {}, { [d.name]: `${randId}` }, 1)
-              tmpTpl=tmpTpl.replace(RegExp(randId,'g'),'{{.}}')
-              // then add array markers
-              tmpTpl = `{{#.}}${tmpTpl}{{/.}}`
-              tmpTpl = ReversiblePreproc._renderMustache(
-                tmpTpl, d.value)
-            } else {
-              partials[d.name] = d.value
-            }
-          }
-          let res = ReversiblePreproc._renderMustache(
-            tmpTpl, this.definesJson, partials)
-          let lineArr = this._makeOutupLineArr(null, res)
-          return lineArr
-        }
-      case symCmdElse:
-      case symCmdElif:
-      case symCmdTplRender:
-      case symCmdIfTplRender:
-        throw new RppError(`known symbol ${sym} not implemented`)
+      //   // for each of the partialsData, check for flag 'a',
+      //   // and if found found substitute array format {{#X}}{{.}}{{/X}}
+      //   // where X is a temporary variable name which doesn't conflict
+      //   let tmpTpl = tpl
+      //   let partials = {}
+      //   for (let d of partialsData) {
+      //     if (d.flags.indexOf('a') >= 0) {
+      //       _assert(d.value instanceof Array)
+      //       let randId = makeNonCryptoRandomAlphaNumString(6)
+      //       // let obj = { [randId]: '' }
+      //       // let arrTpl = `{{#${randId}}}{{.}}{{/${randId}}}`
+      //       // sub {{.}} <- {{<$[n]}}
+      //       tmpTpl = ReversiblePreproc._renderMustache(
+      //         tmpTpl, {}, { [d.name]: `${randId}` }, 1)
+      //       tmpTpl=tmpTpl.replace(RegExp(randId,'g'),'{{.}}')
+      //       // then add array markers
+      //       tmpTpl = `{{#.}}${tmpTpl}{{/.}}`
+      //       tmpTpl = ReversiblePreproc._renderMustache(
+      //         tmpTpl, d.value)
+      //     } else {
+      //       partials[d.name] = d.value
+      //     }
+      //   }
+      //   let res = ReversiblePreproc._renderMustache(
+      //     tmpTpl, this.definesJson, partials)
+      //   let lineArr = this._makeOutupLineArr(null, res)
+      //   return lineArr
+      // }
+      // case symCmdElse:
+      // case symCmdElif:
+      // case symCmdTplRender:
+      // case symCmdIfTplRender:
+      //   throw new RppError(`known symbol ${sym} not implemented`)
       default:
         throw new RppError(`symbol ${sym} unknown`)
     }
@@ -663,137 +580,6 @@ class ReversiblePreproc {
     return [maybeStrippedLine] // in case the if clause was manually deleted while ann present 
   }
 
-  // _parseLine_aux2(line) { // can throw, returns [isCmd, strippedLine / null ]
-  //   // if ps 
-  //   let [sym, offset] = getLineHeadSymbol(line, this.options, this.cmdsSorted, this.annsSorted)
-  //   // if it is symAnnPlain, then we sym, offset, and line before proceeding (don't return)
-  //   if (sym === symAnnPlain) {
-  //     line = line.substr(offset)
-  //     sym = null
-  //     offset = 0
-  //   }
-  //   if (!sym) {
-  //     _assert(this.parseState.tplStringArr.length === 0, "this.parseState.tplStringArr.length===0")
-  //     if (this.parseState.renderedOn)
-  //       return [false, null] // strip entire line -> null 
-  //     else if (this.parseState.ifOnLinum !== -1) {
-  //       if (this.parseState.ifOn)
-  //         return [false, line]
-  //       else
-  //         return [false, this.options.annStem + this.options.annPlain + " " + line]
-  //     } else
-  //       return [false, line]
-  //   }
-  //   if (sym === symCmdAddDef
-  //     || sym === symCmdAddDefJson
-  //     || sym === symCmdAddDefEval) {
-  //     let subs = line.substr(offset)
-  //     let lhs = subs.trimLeft().split(/\s+/g, 1)
-  //     _assert(lhs && lhs instanceof Array && lhs.length,
-  //       `lhs ${lhs} parse error - 1`)
-  //     lhs = lhs[0]
-  //     _assert(lhs.length,
-  //       `lhs ${lhs} parse error - 2`)
-  //     let members = lhs.split('.')
-  //     if (!Reflect.ownKeys(this.definesJson).includes(members[0]))
-  //       this.definesJson[members[0]] = null
-  //     let parent = this.definesJson
-  //     for (let i = 0; i < members.length - 1; i++) {
-  //       let m = members[i]
-  //       let n = members[i + 1]
-  //       if (!Reflect.ownKeys(parent[n]).includes(m))
-  //         parent[n][m] = null
-  //       parent = parent[n]
-  //     }
-  //     let tpl = subs.substring(lhs.length).trimLeft()
-  //     let val = tpl
-  //     switch (sym) {
-  //       case symCmdAddDefJson:
-  //         val = JSON.parse(tpl)
-  //         break
-  //       case symCmdAddDefEval:
-  //         val = (() => { return eval(tpl) })()
-  //         break
-  //     }
-  //     parent[members.slice(-1)] = val
-  //     return [false, line]
-  //   }
-  //   if (sym === symCmdMacro) {
-  //     let [macroName, partials] =
-  //       ReversiblePreproc._parseMacroCall(line.substr(offset))
-  //     _assert(hasOwnKey(this.definesJson, macroName))
-  //     let tpl = this.definesJson[macroName]
-  //     _assert(typeof tpl === 'string')
-  //     let res = ReversiblePreproc._renderMustache(
-  //       tpl, this.definesJson, partials)
-  //     let lineArr = this._makeOutupLineArr(line, res)
-  //     return [true, lineArr]
-  //   } // if (sym === symCmdMacro)
-  //   if (sym === symCmdTpl) {
-  //     this.parseState.tplStringArr.push(line.substr(offset))
-  //     return [false, line]
-  //   }
-  //   if (sym === symCmdPartials) {
-  //     //let evaled = eval(line.substr(offset))
-  //     let partials = JSON.parse(line.substr(offset))
-  //     Object.assign(this.parseState.tplPartials, partials)
-  //     return [false, line]
-  //   }
-  //   if (this.parseState.tplStringArr.length) {
-  //     // only more tpl string or render cmd are allowed
-  //     if (sym === symCmdRender) {
-  //       let res = ReversiblePreproc._renderMustache(
-  //         this.parseState.tplStringArr.join("\n"),
-  //         this.definesJson,
-  //         this.parseState.tplPartials
-  //       )
-  //       let lineArr = this._makeOutupLineArr(line, res)
-  //       this.parseState.tplStringArr = []
-  //       this.parseState.tplPartials = {}
-  //       return [true, lineArr]
-  //     }
-  //     else
-  //       throw new RppError(`found ${sym.toString()}, expecting symCmdTpl or symCmdRender`)
-  //   }
-  //   _assert(sym !== symCmdRender, `${sym.toString()}!==symCmdRender`)
-  //   if (sym === symAnnRendered) {
-  //     _assert(!this.parseState.renderedOn, 'renderedOn is already true')
-  //     this.parseState.renderedOn = true
-  //     return [false, null]
-  //   }
-  //   if (sym === symAnnEndRendered) {
-  //     _assert(this.parseState.renderedOn, 'renderedOn is not true')
-  //     this.parseState.renderedOn = false
-  //     return [false, null]
-  //   }
-  //   _assert(!this.parseState.renderedOn, 'exepected state renderedOn===false ')
-  //   if (sym === symAnnPlain) {
-  //     // strip and return line w/out annotation
-  //     return [false, line.substr(offset)]
-  //   }
-  //   if (sym === symCmdIf) {
-  //     let sub = line.substr(offset)
-  //     let [isOn, err] = judgeLineArg(sub, this.definesJson, this.jsepPreprocInterpret)
-  //     if (err) throw new RppError('judgeLineArg return error')
-  //     // save the previous state 
-  //     this.parseState.ifStack.push([this.parseState.ifOn, this.parseState.ifOnLinum])
-  //     this.parseState.ifOn = isOn
-  //     this.parseState.ifOnLinum = this.parseState.linum
-  //     return [false, line]
-  //   }
-  //   if (sym === symCmdEndif) {
-  //     if (!this.parseState.ifStack.length) {
-  //       // too many end scope commnand - like unbalanced parentheses.
-  //       throw new RppError(`unexpected end directive line ${this.linum}, (unbalanced?)`)
-  //     }
-  //     [this.parseState.ifOn, this.parseState.ifOnLinum]
-  //       = this.parseState.ifStack[this.parseState.ifStack.length - 1]
-  //     this.parseState.ifStack.pop()
-  //     return [false, line]
-  //   }
-  //   throw new RppError(`unhandled symbol ${sym.toString()}`)
-  //   // TODO cases symCmdElif, symCmdElse, symCmdTplRender, symCmdIfTplRender
-  // }
 
   _ensureEol(line) {
     _assert(typeof line === 'string')
