@@ -7,6 +7,8 @@ import Mustache from 'mustache'
 //import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
+export queryVersion() { return "reversible-preproc 2.0.0"}
+
 // globally disable all Mustache escaping 
 Mustache.escape = function (text) { return text }
 
