@@ -27,7 +27,10 @@ function hasOwnKey(obj, key) {
   return Reflect.getOwnPropertyDescriptor(obj, key) !== undefined
 }
 
-
+function deepCopyViaJson(obj) {
+  let copy = JSON.stringify(obj)
+  return JSON.parse(copy)
+}
 
 //const identifierRegex = /^[[$A-Z_][0-9A-Z_$]*/i
 function createIdentifierRegex() {
@@ -94,8 +97,9 @@ var defaultOptions = {
   cmdAddDefEval: 'addDefEval',
   cmdIf: 'if',
   cmdIfEval: 'ifEval',
-  // cmdElse: 'else',
-  // cmdElif: 'elif',
+  cmdElse: 'else',
+  cmdElif: 'elif',
+  cmdElifEval: 'elifEval',
   cmdEndif: 'endif',
   cmdMacro: 'macro',
   cmdTpl: 'tpl',
@@ -121,8 +125,9 @@ const symCmdAddDefJson = Symbol('cmdAddDefJson')
 const symCmdAddDefEval = Symbol('cmdAddDefEval')
 const symCmdIf = Symbol('cmdIf')
 const symCmdIfEval = Symbol('cmdIfEval')
-// const symCmdElse = Symbol('cmdElse')
-// const symCmdElif = Symbol('cmdElif')
+const symCmdElse = Symbol('cmdElse')
+const symCmdElif = Symbol('cmdElif')
+const symCmdElifEval = Symbol('cmdElifEval')
 const symCmdEndif = Symbol('cmdEndif')
 // const symCmdMacro = Symbol('cmdMacro')
 const symCmdTpl = Symbol('cmdTpl')
@@ -206,6 +211,16 @@ function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
   }
 }
 
+function createIfState() {
+  return {
+    else: false,
+    onClauseFound: false,
+    on: undefined,
+    onLinum: -1,
+    ifLinum: -1
+  }
+}
+
 class ReversiblePreproc {
   constructor(definesJson = {}, options = defaultOptions) {
     for (let k of Reflect.ownKeys(defaultOptions))
@@ -229,8 +244,9 @@ class ReversiblePreproc {
     this.linum = -1
     this.parseState = {
       linum: 0, // line number of the input file (count starts at 1)
-      ifOnLinum: -1, // the input line number of current innermost if block start
-      ifOn: false, // currently in an if blocks (possibly multiple)
+      ifState: createIfState(),
+      //      ifOnLinum: -1, // the input line number of current innermost if block start
+      //      ifOn: false, // currently in an if blocks (possibly multiple)
       ifStack: [], // stack for nested if blocks [ ..., [<startline>,<true/false>],...] 
       renderedOn: false, // currently in an annotated rendered region, (will be cleared, maybe rerendered) 
       tplStringArr: [], // cmd-tpl lines are accumulated until cmd-render is encountered, thenoutput 
@@ -241,14 +257,17 @@ class ReversiblePreproc {
         lines: []
       }
     }
+    Object.seal(this.parseState)
+    Object.seal(this.parseState.ifState)
     this.cmdsSorted = [
       [options.cmdAddDef, symCmdAddDef],
       [options.cmdAddDefJson, symCmdAddDefJson],
       [options.cmdAddDefEval, symCmdAddDefEval],
       [options.cmdIf, symCmdIf],
       [options.cmdIfEval, symCmdIfEval],
-      // [options.cmdElse, symCmdElse],
-      // [options.cmdElif, symCmdElif],
+      [options.cmdElif, symCmdElif],
+      [options.cmdElifEval, symCmdElifEval],
+      [options.cmdElse, symCmdElse],
       [options.cmdEndif, symCmdEndif],
       // [options.cmdMacro, symCmdMacro],
       [options.cmdTpl, symCmdTpl],
@@ -310,21 +329,6 @@ class ReversiblePreproc {
   //     }
   //   }
   //   return argDataArr
-  // }
-
-  // static _parseMacroCall(mcall) {
-  //   mcall = mcall.trim()
-  //   let macroName = mcall.match(identifierRegex)[0]
-  //   let rem = mcall.substr(macroName.length).trim()
-  //   let sepchar = rem[0]
-  //   let args = rem.slice(1).split(sepchar)
-  //   let partials = {}
-  //   let n = 0
-  //   for (let arg of args) {
-  //     partials[Number(n).toString()] = arg.trim()
-  //     n++
-  //   }
-  //   return [macroName, partials]
   // }
 
   static _renderMustache_maxIterDefault() { return 1000 }
@@ -418,17 +422,56 @@ class ReversiblePreproc {
         return null
       case symCmdIf:
       case symCmdIfEval:
+      case symCmdElif:
+      case symCmdElifEval:
+        _assert(!this.parseState.ifState.else, '"else" is active, "if/elif" not allowed')
+        if ([symCmdElif, symCmdElifEval].includes(sym)) {
+          _assert(this.parseState.ifState.ifLinum >= 0, "can't have 'elif' without 'if' first")
+          if (this.parseState.ifState.onClauseFound) {
+            // ignore condition because if has already evaluated true 
+            this.parseState.ifState.on = false
+            this.parseState.ifState.onLinum = this.parseState.linum
+            return null
+          }
+        }
         {
+          // save the previous state only if this not 'elif' type command
+          if ([symCmdIf, symCmdIfEval].includes(sym)) {
+            // after introducing createIfState(), deep copy is no longer necessary  
+//            this.parseState.ifStack.push(
+//              deepCopyViaJson(this.parseState.ifState)
+ //           )
+            this.parseState.ifStack.push(this.parseState.ifState)
+            
+            // initialize new state
+            this.parseState.ifState = createIfState()
+            // this.parseState.ifState.else = false
+            // this.parseState.ifState.onClauseFound = false
+            // this.parseState.ifState.on = undefined
+            // this.parseState.ifState.onLinum = -1
+            // this.parseState.ifState.ifLinum = -1
+
+            this.parseState.ifState.ifLinum = this.parseState.linum
+          }
           let [isOn, err] = judgeLineArg(
             lines.join(this._eol()),
             this.definesJson,
-            (sym === symCmdIf ? this.jsepPreprocInterpret : null)
+            ([symCmdIf, symCmdElif].includes(sym) ? this.jsepPreprocInterpret : null)
           )
           if (err) throw new RppError('judgeLineArg error: ' + err)
-          // save the previous state 
-          this.parseState.ifStack.push([this.parseState.ifOn, this.parseState.ifOnLinum])
-          this.parseState.ifOn = isOn
-          this.parseState.ifOnLinum = this.parseState.linum
+          if (isOn) {
+            this.parseState.ifState.onClauseFound = true
+          }
+          this.parseState.ifState.on = isOn
+          this.parseState.ifState.onLinum = this.parseState.linum
+          return null
+        }
+      case symCmdElse:
+        {
+          _assert(!this.parseState.ifState.else)
+          this.parseState.ifState.else = true
+          this.parseState.ifState.on = !this.parseState.ifState.on
+          this.parseState.ifState.onLinum = this.parseState.linum
           return null
         }
       case symCmdEndif:
@@ -437,9 +480,10 @@ class ReversiblePreproc {
             // too many end scope commnand - like unbalanced parentheses.
             throw new RppError(`unexpected end directive line ${this.linum}, (unbalanced?)`)
           }
-          [this.parseState.ifOn, this.parseState.ifOnLinum]
-            = this.parseState.ifStack[this.parseState.ifStack.length - 1]
-          this.parseState.ifStack.pop()
+          this.parseState.ifState = this.parseState.ifStack.pop()
+          // [this.parseState.ifOn, this.parseState.ifOnLinum]
+          //   = this.parseState.ifStack[this.parseState.ifStack.length - 1]
+          // this.parseState.ifStack.pop()
           return null
         }
       case symCmdTpl:
@@ -470,7 +514,7 @@ class ReversiblePreproc {
           this.parseState.tplPartials = {}
           return lineArr
         }
-      //      case symCmdMacro:
+      // case symCmdMacro:
       // {
       //   let lhsRes = matchNextIdentifier(lines[0])
 
@@ -566,9 +610,10 @@ class ReversiblePreproc {
     // no symbols to check for - handle states and plain lines
     if (this.parseState.renderedOn)
       return null // the line is progmatic, remove it
-    if (this.parseState.ifOnLinum >= 0) {
+    //if (this.parseState.ifOnLinum >= 0) 
+    if (this.parseState.ifState.onLinum >= 0) {
       // 'if' command inner region
-      if (this.parseState.ifOn) {
+      if (this.parseState.ifState.on) {
         return [maybeStrippedLine]
       } else {
         return [this.options.annStem
