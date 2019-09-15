@@ -8,7 +8,7 @@
             "type": "node",
             "request": "launch",
             "name": "test-reversible-preproc",
-            "program": "${workspaceFolder}/src/test/test-reversible-preproc.mjs",
+            "program": "${workspaceFolder}/src/test/call-test-reversible-preproc.mjs",
             "console": "internalConsole",
             "outputCapture": "std",
             "runtimeArgs": ["--experimental-modules"]

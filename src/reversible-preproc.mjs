@@ -27,10 +27,10 @@ function hasOwnKey(obj, key) {
   return Reflect.getOwnPropertyDescriptor(obj, key) !== undefined
 }
 
-function deepCopyViaJson(obj) {
-  let copy = JSON.stringify(obj)
-  return JSON.parse(copy)
-}
+// function deepCopyViaJson(obj) {
+//   let copy = JSON.stringify(obj)
+//   return JSON.parse(copy)
+// }
 
 //const identifierRegex = /^[[$A-Z_][0-9A-Z_$]*/i
 function createIdentifierRegex() {
@@ -503,6 +503,10 @@ class ReversiblePreproc {
         }
       case symCmdRender:
         {
+          let tpl = this._arrLinesToStrSpecial(lines[0], lines.slice(1))
+          if (/S/.test(tpl))
+            this.parseState.tplStr = tpl
+
           _assert(this.parseState.tplStr, "this.parseState.tplStr")
           let res = ReversiblePreproc._renderMustache(
             this.parseState.tplStr,
