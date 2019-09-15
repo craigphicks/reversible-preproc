@@ -7,7 +7,7 @@ import Mustache from 'mustache'
 //import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
-function queryVersion() { return "reversible-preproc 2.0.2"}
+function queryVersion() { return "reversible-preproc 2.0.2" }
 
 // globally disable all Mustache escaping 
 Mustache.escape = function (text) { return text }
@@ -403,7 +403,11 @@ class ReversiblePreproc {
         val = JSON.parse(rhs)
         break
       case symCmdAddDefEval:
-        val = (() => { return eval(rhs) })()
+        {
+          let body = '"use strict"\n' + rhs
+          let f = new Function('defines', body)
+          val = f(this.definesJson)
+        }
         break
       default: throw new RppError('programmer error')
     }
@@ -442,11 +446,11 @@ class ReversiblePreproc {
           // save the previous state only if this not 'elif' type command
           if ([symCmdIf, symCmdIfEval].includes(sym)) {
             // after introducing createIfState(), deep copy is no longer necessary  
-//            this.parseState.ifStack.push(
-//              deepCopyViaJson(this.parseState.ifState)
- //           )
+            //            this.parseState.ifStack.push(
+            //              deepCopyViaJson(this.parseState.ifState)
+            //           )
             this.parseState.ifStack.push(this.parseState.ifState)
-            
+
             // initialize new state
             this.parseState.ifState = createIfState()
             // this.parseState.ifState.else = false
@@ -508,7 +512,7 @@ class ReversiblePreproc {
       case symCmdRender:
         {
           let tpl = this._arrLinesToStrSpecial(lines[0], lines.slice(1))
-          if (/S/.test(tpl))
+          if (/\S+/.test(tpl))
             this.parseState.tplStr = tpl
 
           _assert(this.parseState.tplStr, "this.parseState.tplStr")
@@ -744,10 +748,17 @@ class ReversiblePreproc {
       }
       if (this.parseState.multiLineIn.endDetected) {
         // process accumulated command lines and return result
-        let lineOutArr = this._processMultiLineCmd(
-          this.parseState.multiLineIn.cmdSym,
-          this.parseState.multiLineIn.lines
-        )
+        // except when not if related and not if-occluded
+        let lineOutArr
+        if ([symCmdIf, symCmdIfEval, symCmdElif, symCmdElifEval, symCmdEndif]
+          .includes(this.parseState.multiLineIn.cmdSym)
+          || this.parseState.ifState.ifLinum < 0
+          || this.parseState.ifState.on) {
+          lineOutArr = this._processMultiLineCmd(
+            this.parseState.multiLineIn.cmdSym,
+            this.parseState.multiLineIn.lines
+          )
+        }
         this.parseState.multiLineIn.cmdSym = null
         this.parseState.multiLineIn.lines = []
         this.parseState.multiLineIn.endDetected = false
