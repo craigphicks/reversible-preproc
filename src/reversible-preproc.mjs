@@ -7,7 +7,7 @@ import Mustache from 'mustache'
 //import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
-export queryVersion() { return "reversible-preproc 2.0.0"}
+function queryVersion() { return "reversible-preproc 2.0.2"}
 
 // globally disable all Mustache escaping 
 Mustache.escape = function (text) { return text }
@@ -332,6 +332,8 @@ class ReversiblePreproc {
   //   }
   //   return argDataArr
   // }
+
+  static queryVersion() { return queryVersion() }
 
   static _renderMustache_maxIterDefault() { return 1000 }
   static _renderMustache(tpl, defines, partials = {},

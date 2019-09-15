@@ -34,6 +34,24 @@ export default [
 			file : "test/test-reversible-preproc.js",
 			format: "cjs"
 		}
+	},{
+		input:"src/test/call-test-reversible-preproc.mjs",
+		//		plugins: [myResolveId()],
+		plugins:[
+			{
+				resolveId( source ){
+					console.log("myResolveId: ",source)
+					if (source.includes("/test-reversible-preproc")){
+						return {id: './test-reversible-preproc.js', external: true}
+					}
+					return null
+				}
+			}
+		],
+		output: {
+			file : "test/call-test-reversible-preproc.js",
+			format: "cjs"
+		}
 	}
 ]
 
