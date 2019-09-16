@@ -213,11 +213,12 @@ function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
   }
 }
 
-function createIfState() {
+function createIfState(params) {
   return {
     else: false,
-    onClauseFound: false,
-    on: undefined,
+    onAncestor: params.onAncestor, // set by parameter
+    onClauseFound: false, // within the current level of if,elif,...  
+    on: params.on, // set by parameter 
     onLinum: -1,
     ifLinum: -1
   }
@@ -246,7 +247,7 @@ class ReversiblePreproc {
     this.linum = -1
     this.parseState = {
       linum: 0, // line number of the input file (count starts at 1)
-      ifState: createIfState(),
+      ifState: createIfState({ on: true, onAncestor: true }),
       //      ifOnLinum: -1, // the input line number of current innermost if block start
       //      ifOn: false, // currently in an if blocks (possibly multiple)
       ifStack: [], // stack for nested if blocks [ ..., [<startline>,<true/false>],...] 
@@ -452,7 +453,10 @@ class ReversiblePreproc {
             this.parseState.ifStack.push(this.parseState.ifState)
 
             // initialize new state
-            this.parseState.ifState = createIfState()
+            this.parseState.ifState = createIfState({
+              on: false,
+              onAncestor: this.parseState.ifState.on
+            })
             // this.parseState.ifState.else = false
             // this.parseState.ifState.onClauseFound = false
             // this.parseState.ifState.on = undefined
@@ -461,24 +465,29 @@ class ReversiblePreproc {
 
             this.parseState.ifState.ifLinum = this.parseState.linum
           }
-          let [isOn, err] = judgeLineArg(
-            lines.join(this._eol()),
-            this.definesJson,
-            ([symCmdIf, symCmdElif].includes(sym) ? this.jsepPreprocInterpret : null)
-          )
-          if (err) throw new RppError('judgeLineArg error: ' + err)
-          if (isOn) {
-            this.parseState.ifState.onClauseFound = true
+          if (this.parseState.ifState.onAncestor
+            && !this.parseState.ifState.onClauseFound) {
+            let [isOn, err] = judgeLineArg(
+              lines.join(this._eol()),
+              this.definesJson,
+              ([symCmdIf, symCmdElif].includes(sym) ? this.jsepPreprocInterpret : null)
+            )
+            if (err) throw new RppError('judgeLineArg error: ' + err)
+            if (isOn) {
+              this.parseState.ifState.onClauseFound = true
+            }
+            this.parseState.ifState.on = isOn
+            this.parseState.ifState.onLinum = this.parseState.linum
           }
-          this.parseState.ifState.on = isOn
-          this.parseState.ifState.onLinum = this.parseState.linum
           return null
         }
       case symCmdElse:
         {
           _assert(!this.parseState.ifState.else)
           this.parseState.ifState.else = true
-          this.parseState.ifState.on = !this.parseState.ifState.on
+          this.parseState.ifState.on = (
+            this.parseState.ifState.onAncestor
+            && !this.parseState.ifState.onClauseFound)
           this.parseState.ifState.onLinum = this.parseState.linum
           return null
         }
@@ -683,6 +692,14 @@ class ReversiblePreproc {
       this.parseState.linum++ // first line is line 1
       let wsOff = line.search(/\S/)
 
+      // priority is to remove or modify annotated lines before any further processing
+      // if (wsOff>=0 && isSubstrEqual(line, wsOff, this.options.annStem)){
+      //   let off = wsOff+ this.options.annStem.length
+      //   if (isSubstrEqual(line, off, this.options.annPlain)){
+      //     line = line.substr(0,wsOff) + line.substr(off+this.options.annPlain.length+1)
+      //   }
+      // }
+
       // should we search for line head?
       if (!this.parseState.multiLineIn.cmdSym) {
         if (wsOff >= 0 && isSubstrEqual(line, wsOff, this.options.cmdStemMultiStart)) {
@@ -748,9 +765,10 @@ class ReversiblePreproc {
       }
       if (this.parseState.multiLineIn.endDetected) {
         // process accumulated command lines and return result
-        // except when not if related and not if-occluded
+        // except when (not if related and if-occluded)
         let lineOutArr
-        if ([symCmdIf, symCmdIfEval, symCmdElif, symCmdElifEval, symCmdEndif]
+        if ([symCmdIf, symCmdIfEval, symCmdElif, symCmdElifEval, 
+          symCmdElse, symCmdEndif]
           .includes(this.parseState.multiLineIn.cmdSym)
           || this.parseState.ifState.ifLinum < 0
           || this.parseState.ifState.on) {
