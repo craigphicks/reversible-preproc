@@ -7,6 +7,5 @@ node_modules/
 package-lock.json
 dist/
 lib/
-test/
 *.tgz
 *.*gz
