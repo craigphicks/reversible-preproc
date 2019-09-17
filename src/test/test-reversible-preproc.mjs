@@ -8,8 +8,8 @@ import dedent from 'dedent'
 import * as fs from 'fs'
 import readline from 'readline'
 
-import split2 from 'split2'
-import through2 from 'through2'
+// import split2 from 'split2'
+// import through2 from 'through2'
 
 function* testDataGenerator(depth) {
   function* gen(d, name, val, n) {
@@ -811,14 +811,14 @@ class CompareLines {
       { lines: [], last: 0 },
       { lines: [], last: 0 },
     ]
-    if (writeFn){
+    if (writeFn) {
       this.writeStream = fs.createWriteStream(writeFn)
     }
   }
   push(line, n) {
     this.buf[n].lines.push(line)
     this.buf[n].last++
-    if (n == 0){
+    if (n == 0) {
       if (this.writeStream)
         this.writeStream.write(line)
       return
@@ -844,14 +844,28 @@ class CompareLines {
   }
 }
 
-export async function testRppExpectedFile(
-  inFilename, rpp, expFilename = null, writeFn=null) {
+async function testRppExpectedFile(
+  inFilename, definesFilename, evalDefines, expFilename = null, writeFn = null) {
   async function* getline(rl) {
     for await (const line of rl) {
       yield (line)
     }
     console.log('leaving getline')
   }
+
+  let defines = {}
+  if (evalDefines) {
+    let text = fs.ReadFileSync(definesFilename)
+    let body = dedent`
+    'use strict'
+    return ${text}
+    `
+    defines = (Function(body))()
+  } else if (definesFilename) {
+    let text = fs.readFileSync(definesFilename)
+    defines = JSON.parse(text)
+  }
+  let rpp = new ReversiblePreproc(defines)
 
   //  return new Promise((resolve, reject) => {
   const instream = readline.createInterface({
@@ -882,7 +896,7 @@ export async function testRppExpectedFile(
     //let buf0Last = cl.buf[0].last
     let [err, dummy] = rpp.line(inline.value, push0)
     if (!expgen)
-      break
+      continue
     while (cl.buf[0].last > cl.buf[1].last) {
       let expline
       expline = await expgen.next()
@@ -904,11 +918,17 @@ export async function testRppExpectedFile(
       throw 'in done but exp not done'
     }
   }
-  console.log(`${inFilename}\n${JSON.stringify(rpp.defines)}\n SUCCESSS}`)
+  console.log(`${inFilename}\n${JSON.stringify(rpp.defines, null, 2)}\n SUCCESSS`)
   return true
 }
-export async function testRppExpected(){
+export async function testRppExpected() {
 
+  await testRppExpectedFile(
+    './test/data/in.1.js',
+    './test/data/defines.1.json', false,
+    null,
+    './test/data/out.1.1.json',
+  )
 }
 
 export function testAll() {

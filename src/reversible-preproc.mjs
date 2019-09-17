@@ -161,7 +161,7 @@ function isSubstrEqual(line, offset, str) {
 }
 
 
-function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
+function judgeLineArg(str, defines, jsepPreprocInterpret) {
   // if (definesJson === '*') // this overrides and (and prevents calling of) any eval functions
   //   return [true, null]
   if (jsepPreprocInterpret === null) {
@@ -171,7 +171,7 @@ function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
       // in which "defines" refers to the RversiblePreproc 'defines' object.
       let body = '"use strict"\n' + str
       let f = new Function('defines', body)
-      let res = f(definesJson) ? true : false
+      let res = f(defines) ? true : false
       return [res, null]
     }
     catch (e) {
@@ -191,7 +191,7 @@ function judgeLineArg(str, definesJson, jsepPreprocInterpret) {
     // where the preprocess json set up at program start will be passed as
     // the argument to the function
     try {
-      var fnstr = `(${str.slice(1)})(${JSON.stringify(definesJson)})`
+      var fnstr = `(${str.slice(1)})(${JSON.stringify(defines)})`
       return [eval(fnstr), null]
     }
     catch (e) {
@@ -225,25 +225,25 @@ function createIfState(params) {
 }
 
 class ReversiblePreproc {
-  constructor(definesJson = {}, options = defaultOptions) {
+  constructor(defines = {}, options = defaultOptions) {
     for (let k of Reflect.ownKeys(defaultOptions))
       if (!Reflect.ownKeys(options).includes(k))
         options[k] = defaultOptions[k]
     this.options = options
     {
       if (typeof definesJson === 'object') {
-        if (definesJson instanceof Array)
+        if (defines instanceof Array)
           throw new RppError("top level defined object cannot be an Array")
-        for (let k of Reflect.ownKeys(definesJson)) {
+        for (let k of Reflect.ownKeys(defines)) {
           if (reservedIdentifiers.includes(k)) {
             throw new RppError(`${k} is a reserved Identifier, cannot use it in top level defines`)
           }
         }
       }
-      this.definesJson = definesJson
+      this.defines = defines
     }
-    //this.definesJson.EOL = options.eol
-    this.jsepPreprocInterpret = new JsepPreprocInterpret(definesJson)
+    //this.defines.EOL = options.eol
+    this.jsepPreprocInterpret = new JsepPreprocInterpret(defines)
     this.linum = -1
     this.parseState = {
       linum: 0, // line number of the input file (count starts at 1)
@@ -407,13 +407,13 @@ class ReversiblePreproc {
         {
           let body = '"use strict"\n' + rhs
           let f = new Function('defines', body)
-          val = f(this.definesJson)
+          val = f(this.defines)
         }
         break
       default: throw new RppError('programmer error')
     }
 
-    forcePropertyValue(this.definesJson, lhsRes.keys, val)
+    forcePropertyValue(this.defines, lhsRes.keys, val)
     return
   }
 
@@ -469,7 +469,7 @@ class ReversiblePreproc {
             && !this.parseState.ifState.onClauseFound) {
             let [isOn, err] = judgeLineArg(
               lines.join(this._eol()),
-              this.definesJson,
+              this.defines,
               ([symCmdIf, symCmdElif].includes(sym) ? this.jsepPreprocInterpret : null)
             )
             if (err) throw new RppError('judgeLineArg error: ' + err)
@@ -527,7 +527,7 @@ class ReversiblePreproc {
           _assert(this.parseState.tplStr, "this.parseState.tplStr")
           let res = ReversiblePreproc._renderMustache(
             this.parseState.tplStr,
-            this.definesJson,
+            this.defines,
             this.parseState.tplPartials
           )
           let lineArr = this._makeOutupLineArr(null, res)
@@ -551,9 +551,9 @@ class ReversiblePreproc {
       //     lines.slice(1)
       //   )
       //   let partialsData = ReversiblePreproc._parseMacroArgs(
-      //     rhs, this.definesJson)
-      //   //let tpl = this.definesJson['macro'][lhs]
-      //   let tpl = lookupPropertyValue(this.definesJson, lhsRes.keys)
+      //     rhs, this.defines)
+      //   //let tpl = this.defines['macro'][lhs]
+      //   let tpl = lookupPropertyValue(this.defines, lhsRes.keys)
       //   _assert(tpl !== undefined,
       //     `property "${lhsRes.identifier}" not present in defines`)
       //   _assert(typeof tpl === 'string',
@@ -583,7 +583,7 @@ class ReversiblePreproc {
       //     }
       //   }
       //   let res = ReversiblePreproc._renderMustache(
-      //     tmpTpl, this.definesJson, partials)
+      //     tmpTpl, this.defines, partials)
       //   let lineArr = this._makeOutupLineArr(null, res)
       //   return lineArr
       // }

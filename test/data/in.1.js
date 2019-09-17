@@ -1,16 +1,100 @@
 /* 
 This is an example file only for the purpose of testing 
-reversible-preproc-cli
+reversible-preproc
 It is not meant to be run as a program
 */
+
 //--if dev.testA
 import A from 'TestA' 
 //--else
 import A from 'A' 
 //--endif
+
+/* testing if  */
+//--if true
+expected
+  //--if true
+  expected
+  //-elif true
+  unexpected
+  //-elif false
+  unexpected
+  //--else
+  unexpected
+  //--endifd
+//-elif true
+unexpected
+  //--if true
+  unexpected
+  //-elif true
+  unexpected
+  //-elif false
+  unexpected
+  //--else
+  unexpected
+  //--endifd
+//-elif false
+unexpected
+  //--if true
+  unexpected
+  //-elif true
+  unexpected
+  //-elif false
+  unexpected
+  //--else
+  unexpected
+  //--endifd
+//--else
+unexpected
+  //--if true
+  unexpected
+  //-elif true
+  unexpected
+  //-elif false
+  unexpected
+  //--else
+  unexpected
+  //--endifd
+//--endif
+
+/* if multi line
+/*--if 
+   a
+   && a.b
+   && a.b==2
+   && a.b===2
+   && a.b>1
+   && a.b<=3
+*/
+expected
+//--endif
+
+
+// if false
+// comment
+unexpected
+/*--elif 
+   a
+   && a.b
+   && a.b==2
+   && a.b===2
+   && a.b>1
+   && a.b<=3
+*/
+// comment
+expected
+/*--else */
+// comment
+unexpected
+/*--else 
+*/
+// comment
+unexpected
+/*--endif
+*/
+
 //--render import B from {{dev.Bsource}}
 
-/* nonesense follows */
 //--if def(a.z)
 console.log('a.z defined')
 //--elif a.b===1
