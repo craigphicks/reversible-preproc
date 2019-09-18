@@ -219,7 +219,7 @@ function createIfState(params) {
     onAncestor: params.onAncestor, // set by parameter
     onClauseFound: false, // within the current level of if,elif,...  
     on: params.on, // set by parameter 
-    onLinum: -1,
+    //onLinum: -1,
     ifLinum: -1
   }
 }
@@ -433,13 +433,13 @@ class ReversiblePreproc {
       case symCmdIfEval:
       case symCmdElif:
       case symCmdElifEval:
-        _assert(!this.parseState.ifState.else, '"else" is active, "if/elif" not allowed')
         if ([symCmdElif, symCmdElifEval].includes(sym)) {
+          _assert(!this.parseState.ifState.else, '"else" is active, "elif" not allowed')
           _assert(this.parseState.ifState.ifLinum >= 0, "can't have 'elif' without 'if' first")
           if (this.parseState.ifState.onClauseFound) {
             // ignore condition because if has already evaluated true 
             this.parseState.ifState.on = false
-            this.parseState.ifState.onLinum = this.parseState.linum
+            //this.parseState.ifState.onLinum = this.parseState.linum
             return null
           }
         }
@@ -467,8 +467,11 @@ class ReversiblePreproc {
           }
           if (this.parseState.ifState.onAncestor
             && !this.parseState.ifState.onClauseFound) {
+            let expr = this._arrLinesToStrSpecial(lines[0], lines.slice(1))
+
             let [isOn, err] = judgeLineArg(
-              lines.join(this._eol()),
+              //lines.join(this._eol()),
+              expr,
               this.defines,
               ([symCmdIf, symCmdElif].includes(sym) ? this.jsepPreprocInterpret : null)
             )
@@ -477,7 +480,7 @@ class ReversiblePreproc {
               this.parseState.ifState.onClauseFound = true
             }
             this.parseState.ifState.on = isOn
-            this.parseState.ifState.onLinum = this.parseState.linum
+            //this.parseState.ifState.onLinum = this.parseState.linum
           }
           return null
         }
@@ -488,7 +491,7 @@ class ReversiblePreproc {
           this.parseState.ifState.on = (
             this.parseState.ifState.onAncestor
             && !this.parseState.ifState.onClauseFound)
-          this.parseState.ifState.onLinum = this.parseState.linum
+          //this.parseState.ifState.onLinum = this.parseState.linum
           return null
         }
       case symCmdEndif:
@@ -535,63 +538,6 @@ class ReversiblePreproc {
           this.parseState.tplPartials = {}
           return lineArr
         }
-      // case symCmdMacro:
-      // {
-      //   let lhsRes = matchNextIdentifier(lines[0])
-
-
-      //   // let identRegexp = createIdentifierRegex()
-      //   // let reRes0 = identRegexp.exec(lines[0])
-      //   // if (!reRes0)
-      //   //   throw new RppError('macro identifier not found')
-      //   // let lhs = reRes0[0] // expecting it to be top level - TODO allow dots
-
-      //   let rhs = this._arrLinesToStrSpecial(
-      //     lines[0].substr(lhsRes.index + lhsRes.identifier.length),
-      //     lines.slice(1)
-      //   )
-      //   let partialsData = ReversiblePreproc._parseMacroArgs(
-      //     rhs, this.defines)
-      //   //let tpl = this.defines['macro'][lhs]
-      //   let tpl = lookupPropertyValue(this.defines, lhsRes.keys)
-      //   _assert(tpl !== undefined,
-      //     `property "${lhsRes.identifier}" not present in defines`)
-      //   _assert(typeof tpl === 'string',
-      //     `value of property ${lhsRes.identifier} not of type string`)
-
-      //   // for each of the partialsData, check for flag 'a',
-      //   // and if found found substitute array format {{#X}}{{.}}{{/X}}
-      //   // where X is a temporary variable name which doesn't conflict
-      //   let tmpTpl = tpl
-      //   let partials = {}
-      //   for (let d of partialsData) {
-      //     if (d.flags.indexOf('a') >= 0) {
-      //       _assert(d.value instanceof Array)
-      //       let randId = makeNonCryptoRandomAlphaNumString(6)
-      //       // let obj = { [randId]: '' }
-      //       // let arrTpl = `{{#${randId}}}{{.}}{{/${randId}}}`
-      //       // sub {{.}} <- {{<$[n]}}
-      //       tmpTpl = ReversiblePreproc._renderMustache(
-      //         tmpTpl, {}, { [d.name]: `${randId}` }, 1)
-      //       tmpTpl=tmpTpl.replace(RegExp(randId,'g'),'{{.}}')
-      //       // then add array markers
-      //       tmpTpl = `{{#.}}${tmpTpl}{{/.}}`
-      //       tmpTpl = ReversiblePreproc._renderMustache(
-      //         tmpTpl, d.value)
-      //     } else {
-      //       partials[d.name] = d.value
-      //     }
-      //   }
-      //   let res = ReversiblePreproc._renderMustache(
-      //     tmpTpl, this.defines, partials)
-      //   let lineArr = this._makeOutupLineArr(null, res)
-      //   return lineArr
-      // }
-      // case symCmdElse:
-      // case symCmdElif:
-      // case symCmdTplRender:
-      // case symCmdIfTplRender:
-      //   throw new RppError(`known symbol ${sym} not implemented`)
       default:
         throw new RppError(`symbol ${sym} unknown`)
     }
@@ -632,7 +578,7 @@ class ReversiblePreproc {
     if (this.parseState.renderedOn)
       return null // the line is progmatic, remove it
     //if (this.parseState.ifOnLinum >= 0) 
-    if (this.parseState.ifState.onLinum >= 0) {
+    if (this.parseState.ifState.ifLinum >= 0) {
       // 'if' command inner region
       if (this.parseState.ifState.on) {
         return [maybeStrippedLine]
@@ -767,7 +713,7 @@ class ReversiblePreproc {
         // process accumulated command lines and return result
         // except when (not if related and if-occluded)
         let lineOutArr
-        if ([symCmdIf, symCmdIfEval, symCmdElif, symCmdElifEval, 
+        if ([symCmdIf, symCmdIfEval, symCmdElif, symCmdElifEval,
           symCmdElse, symCmdEndif]
           .includes(this.parseState.multiLineIn.cmdSym)
           || this.parseState.ifState.ifLinum < 0

@@ -7,6 +7,7 @@ import assert, { AssertionError } from 'assert'
 import dedent from 'dedent'
 import * as fs from 'fs'
 import readline from 'readline'
+import resolve from 'resolve'
 
 // import split2 from 'split2'
 // import through2 from 'through2'
@@ -815,14 +816,34 @@ class CompareLines {
       this.writeStream = fs.createWriteStream(writeFn)
     }
   }
-  push(line, n) {
+  async flushWriteStream() {
+    // these is no flush, so instead we write a zero length string and use callback
+    // to call resolve
+    await new Promise((resolve) => {
+      this.writeStream.write("", () => {
+        //console.log(args[2])
+        resolve()
+      })
+    })
+  }
+
+  // making push `async` doesn't work because push is executed in rpp.line, 
+  // which is a synchronous function.
+  /*async*/ push(line, n) {
     this.buf[n].lines.push(line)
     this.buf[n].last++
     if (n == 0) {
-      if (this.writeStream)
-        this.writeStream.write(line)
+      if (this.writeStream) {
+        //await new Promise((resolve) => {
+        this.writeStream.write(line, () => {
+          process.stdout.write(line)
+          //resolve()
+        })
+        //})
+      }
       return
     }
+    // from here is case n===1
     assert.ok(this.buf[0].last >= this.buf[1].last, 'buf[1].last should be <= buf[0].last')
     let idx0 = this.buf[0].lines.length - 1 - (this.buf[0].last - this.buf[1].last)
     assert.ok(idx0 >= 0)
@@ -894,7 +915,18 @@ async function testRppExpectedFile(
       break
     //console.log(`in :: ${inline.value}`)
     //let buf0Last = cl.buf[0].last
-    let [err, dummy] = rpp.line(inline.value, push0)
+
+    let [err, _ignore] = rpp.line(inline.value, push0)
+    // let err = await new Promise((resolve, reject) => {
+    //   rpp.line(inline.value, push0, (e) => {
+    //     resolve(e)
+    //   })
+    // })
+    // if necessary flush lines to cl writeFile
+    await cl.flushWriteStream()
+
+    if (err)
+      throw err
     if (!expgen)
       continue
     while (cl.buf[0].last > cl.buf[1].last) {

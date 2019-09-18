@@ -15,31 +15,31 @@ import A from 'A'
 expected
   //--if true
   expected
-  //-elif true
+  //--elif true
   unexpected
-  //-elif false
-  unexpected
-  //--else
-  unexpected
-  //--endifd
-//-elif true
-unexpected
-  //--if true
-  unexpected
-  //-elif true
-  unexpected
-  //-elif false
+  //--elif false
   unexpected
   //--else
   unexpected
   //--endifd
-//-elif false
+//--elif true
 unexpected
   //--if true
   unexpected
-  //-elif true
+  //--elif true
   unexpected
-  //-elif false
+  //--elif false
+  unexpected
+  //--else
+  unexpected
+  //--endifd
+//--elif false
+unexpected
+  //--if true
+  unexpected
+  //--elif true
+  unexpected
+  //--elif false
   unexpected
   //--else
   unexpected
@@ -48,9 +48,9 @@ unexpected
 unexpected
   //--if true
   unexpected
-  //-elif true
+  //--elif true
   unexpected
-  //-elif false
+  //--elif false
   unexpected
   //--else
   unexpected
@@ -65,12 +65,12 @@ unexpected
    && a.b===2
    && a.b>1
    && a.b<=3
-*/
+--end*/
 expected
 //--endif
 
 
-// if false
+//--if false
 // comment
 unexpected
 /*--elif 
@@ -80,18 +80,25 @@ unexpected
    && a.b===2
    && a.b>1
    && a.b<=3
-*/
+--end*/
 // comment
 expected
-/*--else */
+/*--elif 
+   a
+   && a.b
+   && a.b==2
+   && a.b===2
+   && a.b>1
+   && a.b<=3
+--end*/
 // comment
 unexpected
 /*--else 
-*/
+--end*/
 // comment
 unexpected
 /*--endif
-*/
+--end*/
 
 //--render import B from {{dev.Bsource}}
 
