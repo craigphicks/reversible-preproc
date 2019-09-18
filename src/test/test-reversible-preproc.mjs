@@ -819,6 +819,8 @@ class CompareLines {
   async flushWriteStream() {
     // these is no flush, so instead we write a zero length string and use callback
     // to call resolve
+    if (!this.writeStream)
+      return
     await new Promise((resolve) => {
       this.writeStream.write("", () => {
         //console.log(args[2])
@@ -830,38 +832,60 @@ class CompareLines {
   // making push `async` doesn't work because push is executed in rpp.line, 
   // which is a synchronous function.
   /*async*/ push(line, n) {
-    this.buf[n].lines.push(line)
-    this.buf[n].last++
+    if (n == 0 && this.writeStream) {
+      this.writeStream.write(line, () => {
+        process.stdout.write(line)
+      })
+    }
+
     if (n == 0) {
-      if (this.writeStream) {
-        //await new Promise((resolve) => {
-        this.writeStream.write(line, () => {
-          process.stdout.write(line)
-          //resolve()
-        })
-        //})
+      let lns = line.split(/\r?\n/)
+      assert.ok(lns.length > 1, 'TEST CODE: expected # of split lines > 1')
+      for (let ln of lns.slice(0, -1)) {
+        this.buf[0].lines.push(ln)
+        this.buf[0].last++
       }
       return
     }
     // from here is case n===1
+    this.buf[1].lines.push(line)
+    this.buf[1].last++
     assert.ok(this.buf[0].last >= this.buf[1].last, 'buf[1].last should be <= buf[0].last')
     let idx0 = this.buf[0].lines.length - 1 - (this.buf[0].last - this.buf[1].last)
     assert.ok(idx0 >= 0)
-    if (this.buf[1].lines.slice(-1) !== this.buf[0].lines[idx0]) {
+    // the expected (buf[1]) lines are without EOL marker.
+    //let reres0 = /\r{0,1}\n$/.exec(this.buf[0].lines[idx0])
+    //assert.ok(reres0, "no eol at end of output line")
+    let strOut = this.buf[0].lines[idx0]
+    let strExp = this.buf[1].lines.slice(-1)[0]
+    //    if (this.buf[1].lines.slice(-1)
+    //      !== this.buf[0].lines[idx0].slice(0, reres0.index)) {
+    if (strOut !== strExp) {
+      this.showCompareLast(10)
       throw dedent`
       FAIL lines not equal at line # ${this.buf[1].last}
-      ${this.buf[0].line.slice(-1)}
+      expected:
+      ${this.buf[1].lines.slice(-1)}
+      actual:
       ${this.buf[0].lines[idx0]}
       `
     }
   }
-  showBuf1Last(cnt) {
+  showCompareLast(cnt) {
     if (cnt > this.buf[1].lines.length)
       cnt = this.buf[1].lines.length
 
-    //let i = this.buf[1].lines.length - cnt
-    for (let line in this.buf[1].lines.slice(-cnt))
-      process.stdout.write(line)
+    let idx0 = this.buf[1].lines.length - 1
+      - (this.buf[1].last - this.buf[0].last)
+
+    console.log('========== previous lines context =============')
+    for (let line of this.buf[1].lines.slice(-cnt, -1))
+      console.log(line)
+    console.log('=========== output line   ===============')
+    console.log(this.buf[0].lines[idx0])
+    console.log('============ expected line ==============')
+    console.log(this.buf[1].lines.slice(-1)[0])
+    console.log('============               ==============')
   }
 }
 
@@ -871,95 +895,126 @@ async function testRppExpectedFile(
     for await (const line of rl) {
       yield (line)
     }
-    console.log('leaving getline')
+    //console.log('leaving getline')
   }
+  try {
 
-  let defines = {}
-  if (evalDefines) {
-    let text = fs.ReadFileSync(definesFilename)
-    let body = dedent`
+    let defines = {}
+    if (evalDefines) {
+      let text = fs.ReadFileSync(definesFilename)
+      let body = dedent`
     'use strict'
     return ${text}
     `
-    defines = (Function(body))()
-  } else if (definesFilename) {
-    let text = fs.readFileSync(definesFilename)
-    defines = JSON.parse(text)
-  }
-  let rpp = new ReversiblePreproc(defines)
-
-  //  return new Promise((resolve, reject) => {
-  const instream = readline.createInterface({
-    input: fs.createReadStream(inFilename),
-  })
-  let expstream = null
-  if (expFilename) {
-    expstream = readline.createInterface({
-      input: fs.createReadStream(expFilename),
-    })
-  }
-  let ingen = getline(instream)
-  let expgen
-  if (expstream)
-    expgen = getline(expstream)
-
-  //let inline, expline
-  //let expDone = false
-  let cl = new CompareLines(writeFn)
-  let push0 = (line) => { cl.push(line, 0) }
-  let push1 = (line) => { cl.push(line, 1) }
-
-  while (true) {
-    let inline = await ingen.next()
-    if (inline.done)
-      break
-    //console.log(`in :: ${inline.value}`)
-    //let buf0Last = cl.buf[0].last
-
-    let [err, _ignore] = rpp.line(inline.value, push0)
-    // let err = await new Promise((resolve, reject) => {
-    //   rpp.line(inline.value, push0, (e) => {
-    //     resolve(e)
-    //   })
-    // })
-    // if necessary flush lines to cl writeFile
-    await cl.flushWriteStream()
-
-    if (err)
-      throw err
-    if (!expgen)
-      continue
-    while (cl.buf[0].last > cl.buf[1].last) {
-      let expline
-      expline = await expgen.next()
-      if (expline.done) {
-        console.log('exp:: DONE (early)')
-        cl.showBuf1Last(10)
-        //expDone = false
-        throw 'exp:: DONE (early)'
-      } else {
-        cl.push(expline.value, 1) // throws if not line eq
-      }
-    } // while
-  }
-  if (expgen) {
-    let expline = await expgen.next()
-    if (!expline.done) {
-      console.log('in done but exp not done')
-      cl.showBuf1Last(10)
-      throw 'in done but exp not done'
+      defines = (Function(body))()
+    } else if (definesFilename) {
+      let text = fs.readFileSync(definesFilename)
+      defines = JSON.parse(text)
     }
+    let rpp = new ReversiblePreproc(defines)
+
+    //  return new Promise((resolve, reject) => {
+    const instream = readline.createInterface({
+      input: fs.createReadStream(inFilename),
+    })
+    let expstream = null
+    if (expFilename) {
+      expstream = readline.createInterface({
+        input: fs.createReadStream(expFilename),
+      })
+    }
+    let ingen = getline(instream)
+    let expgen
+    if (expstream)
+      expgen = getline(expstream)
+
+    //let inline, expline
+    //let expDone = false
+    let cl = new CompareLines(writeFn)
+    let push0 = (line) => { cl.push(line, 0) }
+    let push1 = (line) => { cl.push(line, 1) }
+
+    while (true) {
+      let inline = await ingen.next()
+      if (inline.done)
+        break
+      //console.log(`in :: ${inline.value}`)
+      //let buf0Last = cl.buf[0].last
+
+      let [err, _ignore] = rpp.line(inline.value, push0)
+      // let err = await new Promise((resolve, reject) => {
+      //   rpp.line(inline.value, push0, (e) => {
+      //     resolve(e)
+      //   })
+      // })
+      // if necessary flush lines to cl writeFile
+      await cl.flushWriteStream()
+
+      if (err)
+        throw err
+      if (!expgen)
+        continue
+      while (cl.buf[0].last > cl.buf[1].last) {
+        let expline
+        expline = await expgen.next()
+        if (expline.done) {
+          console.log('exp:: DONE (early)')
+          cl.showBuf1Last(10)
+          //expDone = false
+          throw 'exp:: DONE (early)'
+        } else {
+          cl.push(expline.value, 1) // throws if not line eq
+        }
+      } // while
+    }
+    if (expgen) {
+      let expline = await expgen.next()
+      if (!expline.done) {
+        console.log('in done but exp not done')
+        cl.showBuf1Last(10)
+        throw 'in done but exp not done'
+      }
+    }
+    console.log(
+      dedent`
+    SUCCESS
+    sourcefile: ${inFilename}
+    defines file: ${definesFilename}
+    `)
+    if (expFilename)
+      console.log(`expect filename: ${expFilename}`)
+    if (writeFn)
+      console.log(`write filename: ${writeFn}`)
+
+    return true
+  } catch (e) {
+    console.log(e)
+    console.log(
+      dedent`
+    FAILURE
+    sourcefile: ${inFilename}
+    defines file: ${definesFilename}
+    `)
+    if (expFilename)
+      console.log(`expect filename: ${expFilename}`)
+    if (writeFn)
+      console.log(`write filename: ${writeFn}`)
+    throw e
   }
-  console.log(`${inFilename}\n${JSON.stringify(rpp.defines, null, 2)}\n SUCCESSS`)
-  return true
 }
 export async function testRppExpected() {
 
+  // await testRppExpectedFile(
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   null,
+  //   './test/data/out.1.1.json',
+  // )
   await testRppExpectedFile(
     './test/data/in.1.js',
     './test/data/defines.1.json', false,
-    null,
-    './test/data/out.1.1.json',
+    './test/data/exp.1.1.json',
+    //'./test/data/out.1.1.json',
   )
 }
 
