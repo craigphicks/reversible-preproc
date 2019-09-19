@@ -4,114 +4,155 @@
 
 *Note: Version `2.x.x` is a breaking change from version `1.x.x`.*
 
-This module provides the following preprocessor functionalities:
- 
- - block switching condtional expressions 
-   - via either `eval` or psuedo javascript enabled through `npmn jsep` and an simple interpreter.
- - substitution and templates 
-   - via the dependency `npm mustache` 
+This module enables the following preprocessor functionalities:
+ - a "defines" object passed as an argument into the processor.
+ - template rendering with Mustache syntax, using "defines" object values as arguments
+ - condtional expressions evaluated with respect to the "defines" object values.
+ - nested if/elif/else/endif functionality, using as arguments the conditional expressions.
+   - both ordinary code and process templates code may be enabled/masked within an if family of commands. 
+
+The Mustache syntax is implemented with the npm *mustache* module.
+
+The conditional expression are parsed to APT (abstract parse tree) form using the npm *jsep* module,
+then reduced to boolean using a simple in-this-module interpreter.
 
 The *"reversible"* moniker indicates that it is suitable for lightweight switching back 
-and forth between configuations (e.g., in-place).  
-This is possible because no information is lost by the preprocess.
-
-Processing speed is a high priority.  This is achieved by gating access to heavy processing 
-(esp. `mustache`) with command lines having a fixed prefix, e.g. 
-
- - `//--if <conditional expression>`
- - `//--tpl <template expression>`
- - `//--render`
- - `//--endif`
-
-The processing is line based, and in typical usage most lines will simply be compared 
-with some fixed prefix (which is configurable) and rejected.
-
-Note: This modules only offers core functionality for a preprocessor, e.g., 
-it can be used to implement preprocessing in a stream, or a CLI program. 
-For example, the `npm` package `reversible-preprocess-cli` is a CLI program implemented 
-with this module, and the `npm` package `gulp-reversible-preprocess-cli` 
-is for integrating with the build environment oferred by the `npm` package `gulp`
-
-## 2. Example usage
-
-
-## 2.1.  Inside file to be preprocessed
-
+and forth between configuations (e.g., in-place).  The output of processing *source* with defines object *defA*
+is the same as taking the output of processing *source* with defines object *defB* and processing that 
+with defines object *defA*, for arbitrary *defA* and *defB*.  In psuedo-code 
 
 ```
-//--if Test
-import A from `TestA`
+proc(source,defA) === proc(proc(source,defB),defA)
+```
+
+The interface for passing the source is a function *line(...)* which expects one line of source 
+code at time.  The following sibling npm modules provide higher level interfaces:
+
+ - *reversible-preproc-cli* : a CLI for processing whole files
+ - *gulp-reversible-preproc* : an interface providing a *gulp* style pipe for the npm *gulp* module. 
+
+If the majority of source lines are not subject to processing, then most lines 
+are simply checked for a command after whitespace and then passed directly to output.
+Processing does not subject all text to regular expression searches - such searches only happen
+on lines with certain specific processing commands.
+
+
+## 2. Example source command usage
+
+Suppose input *defines* is an object
+
+```
+{
+  "dev":{
+    "A":{
+	  "test": true,
+	  "source": "Atest"
+	}
+  },
+  "packageJson": {
+    "name": "test",
+	"version": "0.0.0",
+	"description": "TEST"
+  }
+}
+```
+
+and the source being processed is
+```
+//--if dev.A.test
+//--render import A from {{dev.A.source}}
 //--else
-import A from `A`
+import A from 'A' 
 //--endif
 
+/*--render 
+function queryVersion(){
+   return 
+   '{{packageJson.name}} {{packageJson.version}} - {{packageJson.description}}'
+}
+--end*/
 
-//--tpl const version_string = {{version}} 
-//--render
+/*--addDefJson symstrings [
+"A",
+"B",
+"C"
+] --end*/
+
+/*--render 
+{{#symstrings}}
+const sym{{.}} = Symbol("{{.}}")
+{{/symstrings}}
+--end*/
 ```
 
-## 2.2.  Calling code line processing
 
+The resulting output would be 
+
+```
+//--if dev.A.test
+//--render import A from {{dev.A.source}}
+//!!rendered
+import A from Atest
+//!!endRendered
+//--else
+//!!plain import A from 'A' 
+//--endif
+
+/*--render 
+function queryVersion(){
+   return 
+   '{{packageJson.name}} {{packageJson.version}} - {{packageJson.description}}'
+}
+--end*/
+//!!rendered
+function queryVersion(){
+   return 
+   'test 0.0.0 - TEST'
+}
+//!!endRendered
+
+/*--addDefJson symstrings [
+"A",
+"B",
+"C"
+] --end*/
+
+/*--render 
+{{#symstrings}}
+const sym{{.}} = Symbol("{{.}}")
+{{/symstrings}}
+--end*/
+//!!rendered
+const symA = Symbol("A")
+const symB = Symbol("B")
+const symC = Symbol("C")
+//!!endRendered
+```
+
+### 2.2.  Calling code line processing
 
 As mention in the *Outine* above, 
-other modules are provided to to take care of calling code.
-This example is simplifiied and skips details. 
+other npm modules provide a higher level interface.
+
+However, a simple and complete working example 
+using only the core module 'reverible-preproc'
+is as follows:
 
 ```
-...
-import ReversiblePreproc from 'reversible-preproc'
-import split2 from 'split2'
-import through2 from 'through2'
-...
-...
-async function PreProc(rpp, readable, writable) {
-    function makeThroughLineFunc(rpp) {
-        return (line, enc, next) => {
-            let [err, outline] = rpp.line(line)
-            next(err, outline+`\n`)
-        }
-    }
-    await events.once(
-        readable
-            .pipe(split2('\n'))
-            .pipe(through2.obj(makeThroughLineFunc(rpp)))
-            .pipe(writable),
-        'finish')
-}
-{
-    // setup and execution
-	defines = { // usually read from file
-		version : "1.0.0"
-		TestA : true
-	}
-    ReversiblePreproc rpp(defines)
-	const readable = ...
-	const writable = ...
-	PreProc(rpp,readable,writable)
-}
+mkdir temp-rpp
+cd temp-rpp
+npm install reversible-preproc
 ```
 
-## Preprocessing result 
+Create a test program `test-rpp.js`
+
+```test-rpp.js
 
 ```
-//--if Test
-import A from `TestA`
-//--else
-//!!import A from `A`
-//--endif
 
 
-//--tpl const version_string = {{version}}
-//--render
-//!!rendered
-version_string = "1.0.0"
-//!!endrendered
+Execute the program
 ```
-
-The conditions statements and templates are not lost
-as a result of preprocessing.  It is possible for 
-the output to undergo preprocessing again with a different `defines`
-without interference from the intermediate results. (Obviosly 
-it is possible to design or accidentally create intermediate output
-which *would* interfere - but with reasonable care that can be avoided.)
+node test-rpp.js 
+```
 

@@ -1002,7 +1002,32 @@ async function testRppExpectedFile(
     throw e
   }
 }
+
+const testRppExpected_data = [
+  [
+    './test/data/in.demo0.js',
+    './test/data/defines.demo0.json', false,
+    null,
+    './test/data/out.demo0.js',
+  ]
+  // [
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   null,
+  //   './test/data/out.1.1.js',
+  // ],
+  // [
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   './test/data/exp.1.1.js',
+  // ],
+]
+
 export async function testRppExpected() {
+
+  for (let args of testRppExpected_data) {
+    await testRppExpectedFile(...args)
+  }
 
   // await testRppExpectedFile(
   //   './test/data/in.1.js',
@@ -1010,12 +1035,12 @@ export async function testRppExpected() {
   //   null,
   //   './test/data/out.1.1.json',
   // )
-  await testRppExpectedFile(
-    './test/data/in.1.js',
-    './test/data/defines.1.json', false,
-    './test/data/exp.1.1.json',
-    //'./test/data/out.1.1.json',
-  )
+  // await testRppExpectedFile(
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   './test/data/exp.1.1.json',
+  //   //'./test/data/out.1.1.json',
+  // )
 }
 
 export function testAll() {
