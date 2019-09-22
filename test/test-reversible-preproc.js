@@ -8,56 +8,11 @@ var ReversiblePreproc = _interopDefault(require('../lib/index.js'));
 var assert = require('assert');
 var assert__default = _interopDefault(assert);
 var dedent = _interopDefault(require('dedent'));
+var fs = require('fs');
+var readline = _interopDefault(require('readline'));
+require('resolve');
 
 /* eslint-disable no-unused-vars */
-//import { truncateSync } from 'fs'
-
-function* testDataGenerator(depth) {
-  function* gen(d, name, val, n) {
-
-    // new style for jsepPreprocInterpret
-    let cmd = [
-      `//--if ${name}===${val}\n`,
-      `//--endif\n`,
-    ];
-
-    yield (cmd[0]);
-    for (let i = 0; i < n; i++) {
-      yield (`${val}\n`);
-      if (d) {
-        yield* gen(d - 1, name, (val + i + 1) % 2, n);
-      }
-    }
-    yield (`${val}\n`);
-    yield (cmd[1]);
-  }
-
-  // eslint-disable-next-line no-extra-boolean-cast
-  let initialValue = 0;
-  yield* gen(depth, 'test', initialValue, 3);
-}
-
-function* testDataGenerator2(depth, cmdstrIf) {
-  function* gen(d, val, n) {
-    let cmd = [
-      `//--${cmdstrIf(val)} `,
-      `//--endif`,
-    ];
-    yield (cmd[0]);
-    for (let i = 0; i < n; i++) {
-      yield (`${val}`);
-      if (d) {
-        yield* gen(d - 1, (val + i + 1) % 2, n);
-      }
-    }
-    yield (`${val}`);
-    yield (cmd[1]);
-  }
-
-  // eslint-disable-next-line no-extra-boolean-cast
-  let initialValue = 0;
-  yield* gen(depth, initialValue, 3);
-}
 
 
 function* lineGen(text) {
@@ -68,64 +23,6 @@ function* lineGen(text) {
   if (arr.slice(-1)[0].length)
     yield arr.slice(-1)[0];
 
-}
-
-
-//async function test() {
-
-function test1() {
-  //const readable = Readable.from(testDataGenerator(3))
-  let rp1 = new ReversiblePreproc({ test: 0 });
-  let rp2 = new ReversiblePreproc({});
-  let rp3 = new ReversiblePreproc({ test: 0 });
-  //  let rp4 = new ReversiblePreproc('*')
-  for (const line of testDataGenerator(3)) {
-    //process.stdout.write(line)
-    let [err1, line1] = rp1.line(line);
-    if (err1) throw err1
-    assert__default.ok(line1[0] == '0' || line1.substr(0, 2) === '//',
-      "line1[0]=='0'||line1.substr(0,2)==='//'");
-    let [err2, line2] = rp2.line(line1);
-    if (err2) throw err2
-    let [err3, line3] = rp3.line(line2);
-    if (err3) throw err3
-    assert__default.ok(line3 === line1, "reversibility");
-    // let [err4, line4] = rp4.line(line3)
-    // if (err4) throw err4
-    // assert.ok(line4.slice(0, 4) !== '//!!', "line4.slice(0,4)!=='//!!'")
-  }
-  console.log("test1 passed");
-  return true
-}
-function test2() {
-  // test the eval function
-  let cmdstrFn = (val) => {
-    //return `:(pp)=>{return (pp.foo && pp.foo.bar==${val})}`
-    return `ifEval return (defines.foo && defines.foo.bar==${val})`
-  };
-  //const readable = Readable.from(testDataGenerator2(3, cmdstrFn))
-  let rp1 = new ReversiblePreproc({ foo: { bar: 0 } });
-  let rp2 = new ReversiblePreproc({});
-  let rp3 = new ReversiblePreproc({ foo: { bar: 0 } });
-  //let rp4 = new ReversiblePreproc('*')
-  //for await (const line of readable) {
-  for (const line of testDataGenerator2(3, cmdstrFn)) {
-    let [err1, line1] = rp1.line(line);
-    if (err1) throw err1
-    assert__default.ok(line1[0] == '0' || line1.substr(0, 2) === '//',
-      "line1[0]=='0'||line1.substr(0,2)==='//'");
-    let [err2, line2] = rp2.line(line1);
-    if (err2) throw err2
-    let [err3, line3] = rp3.line(line2);
-    if (err3) throw err3
-    assert__default.ok(line3 === line1, "reversibility");
-    // let [err4, line4] = rp4.line(line3)
-    // if (err4) throw err4
-    // console.log(line4)
-    // assert.ok(line4.slice(0, 4) !== '//!!', "line4.slice(0,4)!=='//!!'")
-  }
-  console.log("test2 passed");
-  return true
 }
 
 function test3() {
@@ -333,12 +230,12 @@ const tplTestData2 = [
   [
     {},
     dedent`
-    //--addDefEval array ['A','B','C']
+    //--addDefEval array return ['A','B','C']
     //--tpl {{#array}}{{.}}{{/array}}
     //--render
     `,
     dedent`
-    //--addDefEval array ['A','B','C']
+    //--addDefEval array return ['A','B','C']
     //--tpl {{#array}}{{.}}{{/array}}
     //--render
     //!!rendered
@@ -615,12 +512,158 @@ const tplTestData6 = [
   ],
 ];
 
+const tplTestData7 = [
+  [
+    Object.assign(
+      JSON.parse('{"a":{"b":2}, "dev":{"testA":true,"Bsource":"testB"}}'),
+      { packageJson: { name: 'test', version: '0.0.0', description: 'TEST' } }
+    ),
+    dedent`
+    /* 
+    This is an example file only for the purpose of testing 
+    reversible-preproc-cli
+    It is not meant to be run as a program
+    */
+    //--if dev.testA
+    import A from 'TestA' 
+    //--else
+    import A from 'A' 
+    //--endif
+    //--render import B from {{dev.Bsource}}
+    
+    /* nonesense follows */
+    //--if def(a.z)
+    console.log('a.z defined')
+    //--elif a.b===1
+    console.log('a.b is 1')
+    //--else
+      //--render console.log('a.b is {{a.b}}')
+    //--endif
+    
+    //--if ndef(packageJson)
+    
+    /* 'packageJson' can be added to 'defines' externally as input to 
+       reversible-preprocess-cli (recommended).  However it is also possible to load it 
+       during execution via 'eval' as shown here:
+    */ 
+    /*--addDefEval packageJson
+    import fs = from 'fs';
+    let raw = fs.readFileSync('fake-package.json');
+    return JSON.parse(raw);
+    --end*/
+    
+    //--endif
+    
+    /*--render 
+    function queryVersion(){
+       return 
+       '{{packageJson.name}} {{packageJson.version}} - {{packageJson.description}}'
+    }
+    --end*/
+    
+    /* macro style for symbol definition
+    /*--addDefJson symstrings [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F" 
+    ] --end*/
+    /*--render 
+    {{#symstrings}}
+    const sym{{.}} = Symbol("{{.}}")
+    {{/symstrings}}
+    --end*/
+        `,
+    dedent`
+    /* 
+    This is an example file only for the purpose of testing 
+    reversible-preproc-cli
+    It is not meant to be run as a program
+    */
+    //--if dev.testA
+    import A from 'TestA' 
+    //--else
+    //!!plain import A from 'A' 
+    //--endif
+    //--render import B from {{dev.Bsource}}
+    //!!rendered
+    import B from testB
+    //!!endRendered
+
+    /* nonesense follows */
+    //--if def(a.z)
+    //!!plain console.log('a.z defined')
+    //--elif a.b===1
+    //!!plain console.log('a.b is 1')
+    //--else
+      //--render console.log('a.b is {{a.b}}')
+    //!!rendered
+    console.log('a.b is 2')
+    //!!endRendered
+    //--endif
+
+    //--if ndef(packageJson)
+    //!!plain 
+    //!!plain /* 'packageJson' can be added to 'defines' externally as input to 
+    //!!plain    reversible-preprocess-cli (recommended).  However it is also possible to load it 
+    //!!plain    during execution via 'eval' as shown here:
+    //!!plain */ 
+    /*--addDefEval packageJson
+    import fs = from 'fs';
+    let raw = fs.readFileSync('fake-package.json');
+    return JSON.parse(raw);
+    --end*/
+    //!!plain 
+    //--endif
+    
+    /*--render 
+    function queryVersion(){
+       return 
+       '{{packageJson.name}} {{packageJson.version}} - {{packageJson.description}}'
+    }
+    --end*/
+    //!!rendered
+    function queryVersion(){
+       return 
+       'test 0.0.0 - TEST'
+    }
+    //!!endRendered
+
+    /* macro style for symbol definition
+    /*--addDefJson symstrings [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F" 
+    ] --end*/
+    /*--render 
+    {{#symstrings}}
+    const sym{{.}} = Symbol("{{.}}")
+    {{/symstrings}}
+    --end*/
+    //!!rendered
+    const symA = Symbol("A")
+    const symB = Symbol("B")
+    const symC = Symbol("C")
+    const symD = Symbol("D")
+    const symE = Symbol("E")
+    const symF = Symbol("F")
+    //!!endRendered
+    `
+  ],
+];
+
 
 class TestTplOut {
   constructor() {
     this.lines = [];
   }
   push(line) {
+    //if (line) process.stdout.write(line)
     this.lines.push(line);
   }
 }
@@ -649,32 +692,273 @@ function testTpl(testData, testnum = -1) {
       for (let n = 0; n < outarr.length; n++) {
         assert__default.ok(outarr[n] === compare[n], `${outarr[n]} === ${compare[n]}`);
       }
+      //process.stdout.write("========================================" + '\n')
     }
   }
   console.log(`testTpl() #${testnum} passed`);
   return true
 }
 
+
+class CompareLines {
+  constructor(writeFn) {
+    this.buf = [
+      { lines: [], last: 0 },
+      { lines: [], last: 0 },
+    ];
+    if (writeFn) {
+      this.writeStream = fs.createWriteStream(writeFn);
+    }
+  }
+  async flushWriteStream() {
+    // these is no flush, so instead we write a zero length string and use callback
+    // to call resolve
+    if (!this.writeStream)
+      return
+    await new Promise((resolve) => {
+      this.writeStream.write("", () => {
+        //console.log(args[2])
+        resolve();
+      });
+    });
+  }
+
+  // making push `async` doesn't work because push is executed in rpp.line, 
+  // which is a synchronous function.
+  /*async*/ push(line, n) {
+    if (n == 0 && this.writeStream) {
+      this.writeStream.write(line, () => {
+        process.stdout.write(line);
+      });
+    }
+
+    if (n == 0) {
+      let lns = line.split(/\r?\n/);
+      assert__default.ok(lns.length > 1, 'TEST CODE: expected # of split lines > 1');
+      for (let ln of lns.slice(0, -1)) {
+        this.buf[0].lines.push(ln);
+        this.buf[0].last++;
+      }
+      return
+    }
+    // from here is case n===1
+    this.buf[1].lines.push(line);
+    this.buf[1].last++;
+    assert__default.ok(this.buf[0].last >= this.buf[1].last, 'buf[1].last should be <= buf[0].last');
+    let idx0 = this.buf[0].lines.length - 1 - (this.buf[0].last - this.buf[1].last);
+    assert__default.ok(idx0 >= 0);
+    // the expected (buf[1]) lines are without EOL marker.
+    //let reres0 = /\r{0,1}\n$/.exec(this.buf[0].lines[idx0])
+    //assert.ok(reres0, "no eol at end of output line")
+    let strOut = this.buf[0].lines[idx0];
+    let strExp = this.buf[1].lines.slice(-1)[0];
+    //    if (this.buf[1].lines.slice(-1)
+    //      !== this.buf[0].lines[idx0].slice(0, reres0.index)) {
+    if (strOut !== strExp) {
+      this.showCompareLast(10);
+      throw dedent`
+      FAIL lines not equal at line # ${this.buf[1].last}
+      expected:
+      ${this.buf[1].lines.slice(-1)}
+      actual:
+      ${this.buf[0].lines[idx0]}
+      `
+    }
+  }
+  showCompareLast(cnt) {
+    if (cnt > this.buf[1].lines.length)
+      cnt = this.buf[1].lines.length;
+
+    let idx0 = this.buf[1].lines.length - 1
+      - (this.buf[1].last - this.buf[0].last);
+
+    console.log('========== previous lines context =============');
+    for (let line of this.buf[1].lines.slice(-cnt, -1))
+      console.log(line);
+    console.log('=========== output line   ===============');
+    console.log(this.buf[0].lines[idx0]);
+    console.log('============ expected line ==============');
+    console.log(this.buf[1].lines.slice(-1)[0]);
+    console.log('============               ==============');
+  }
+}
+
+async function testRppExpectedFile(
+  inFilename, definesFilename, evalDefines, expFilename = null, writeFn = null) {
+  async function* getline(rl) {
+    for await (const line of rl) {
+      yield (line);
+    }
+    //console.log('leaving getline')
+  }
+  try {
+
+    let defines = {};
+    if (evalDefines) {
+      let text = fs.ReadFileSync(definesFilename);
+      let body = dedent`
+    'use strict'
+    return ${text}
+    `;
+      defines = (Function(body))();
+    } else if (definesFilename) {
+      let text = fs.readFileSync(definesFilename);
+      defines = JSON.parse(text);
+    }
+    let rpp = new ReversiblePreproc(defines);
+
+    //  return new Promise((resolve, reject) => {
+    const instream = readline.createInterface({
+      input: fs.createReadStream(inFilename),
+    });
+    let expstream = null;
+    if (expFilename) {
+      expstream = readline.createInterface({
+        input: fs.createReadStream(expFilename),
+      });
+    }
+    let ingen = getline(instream);
+    let expgen;
+    if (expstream)
+      expgen = getline(expstream);
+
+    //let inline, expline
+    //let expDone = false
+    let cl = new CompareLines(writeFn);
+    let push0 = (line) => { cl.push(line, 0); };
+    let push1 = (line) => { cl.push(line, 1); };
+
+    while (true) {
+      let inline = await ingen.next();
+      if (inline.done)
+        break
+      //console.log(`in :: ${inline.value}`)
+      //let buf0Last = cl.buf[0].last
+
+      let [err, _ignore] = rpp.line(inline.value, push0);
+      // let err = await new Promise((resolve, reject) => {
+      //   rpp.line(inline.value, push0, (e) => {
+      //     resolve(e)
+      //   })
+      // })
+      // if necessary flush lines to cl writeFile
+      await cl.flushWriteStream();
+
+      if (err)
+        throw err
+      if (!expgen)
+        continue
+      while (cl.buf[0].last > cl.buf[1].last) {
+        let expline;
+        expline = await expgen.next();
+        if (expline.done) {
+          console.log('exp:: DONE (early)');
+          cl.showCompareLast(10);
+          //expDone = false
+          throw 'exp:: DONE (early)'
+        } else {
+          cl.push(expline.value, 1); // throws if not line eq
+        }
+      } // while
+    }
+    if (expgen) {
+      let expline = await expgen.next();
+      if (!expline.done) {
+        console.log('in done but exp not done');
+        cl.showCompareLast(10);
+        throw 'in done but exp not done'
+      }
+    }
+    console.log(
+      dedent`
+    SUCCESS
+    sourcefile: ${inFilename}
+    defines file: ${definesFilename}
+    `);
+    if (expFilename)
+      console.log(`expect filename: ${expFilename}`);
+    if (writeFn)
+      console.log(`write filename: ${writeFn}`);
+
+    return true
+  } catch (e) {
+    console.log(e);
+    console.log(
+      dedent`
+    FAILURE
+    sourcefile: ${inFilename}
+    defines file: ${definesFilename}
+    `);
+    if (expFilename)
+      console.log(`expect filename: ${expFilename}`);
+    if (writeFn)
+      console.log(`write filename: ${writeFn}`);
+    throw e
+  }
+}
+
+const testRppExpected_data = [
+  [
+    './test/data/in.demo0.js',
+    './test/data/defines.demo0.json', false,
+    './test/data/exp.demo0.js',
+  ],
+  // [
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   null,
+  //   './test/data/out.1.1.js',
+  // ],
+  [
+    './test/data/in.tm1.js',
+    './test/data/defines.tm1.json', false,
+    './test/data/exp.tm1.tm1.js',
+  ],
+];
+
+async function testRppExpected() {
+
+  for (let args of testRppExpected_data) {
+    await testRppExpectedFile(...args);
+  }
+
+  // await testRppExpectedFile(
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   null,
+  //   './test/data/out.1.1.json',
+  // )
+  // await testRppExpectedFile(
+  //   './test/data/in.1.js',
+  //   './test/data/defines.1.json', false,
+  //   './test/data/exp.1.1.json',
+  //   //'./test/data/out.1.1.json',
+  // )
+}
+
 function testAll() {
   try {
     console.log(ReversiblePreproc.queryVersion());
-    test1();
-    test2();
-    test3();
-    test4();
-    testByLine();
+    // xxx test1()
+    // xxx test2()
+     test3();
+     test4();
+     testByLine();
     testTpl(tplTestData1, 1);
     testTpl(tplTestData2, 2);
     testTpl(tplTestData3, 3);
     testTpl(tplTestData4, 4);
     testTpl(tplTestData5, 5);
     testTpl(tplTestData6, 6);
+    testTpl(tplTestData7, 7);
     console.log('testAll PASS');
     return true
   } catch (e) {
+    console.log(e);
     console.log('testAll FAIL');
     return false
   }
 }
 
 exports.testAll = testAll;
+exports.testRppExpected = testRppExpected;

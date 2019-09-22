@@ -7,7 +7,7 @@ import Mustache from 'mustache'
 //import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
-function queryVersion() { return "reversible-preproc 2.0.2" }
+function queryVersion() { return "reversible-preproc 2.0.3" }
 
 // globally disable all Mustache escaping 
 Mustache.escape = function (text) { return text }
@@ -90,7 +90,7 @@ var defaultOptions = {
   //  reversibleCommentIndicator: '!!',
   // 2.x.x
   // cmdStemMulti(StartEnd) used for 
-  //    
+  // 
   cmdStemMultiStart: '/*--',
   cmdStemMultiEnd: '--end*/',
   cmdStem: '//--',

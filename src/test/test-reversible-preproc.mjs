@@ -766,7 +766,7 @@ class TestTplOut {
     this.lines = []
   }
   push(line) {
-    if (line) process.stdout.write(line)
+    //if (line) process.stdout.write(line)
     this.lines.push(line)
   }
 }
@@ -959,7 +959,7 @@ async function testRppExpectedFile(
         expline = await expgen.next()
         if (expline.done) {
           console.log('exp:: DONE (early)')
-          cl.showBuf1Last(10)
+          cl.showCompareLast(10)
           //expDone = false
           throw 'exp:: DONE (early)'
         } else {
@@ -971,7 +971,7 @@ async function testRppExpectedFile(
       let expline = await expgen.next()
       if (!expline.done) {
         console.log('in done but exp not done')
-        cl.showBuf1Last(10)
+        cl.showCompareLast(10)
         throw 'in done but exp not done'
       }
     }
@@ -1007,20 +1007,19 @@ const testRppExpected_data = [
   [
     './test/data/in.demo0.js',
     './test/data/defines.demo0.json', false,
-    null,
-    './test/data/out.demo0.js',
-  ]
+    './test/data/exp.demo0.js',
+  ],
   // [
   //   './test/data/in.1.js',
   //   './test/data/defines.1.json', false,
   //   null,
   //   './test/data/out.1.1.js',
   // ],
-  // [
-  //   './test/data/in.1.js',
-  //   './test/data/defines.1.json', false,
-  //   './test/data/exp.1.1.js',
-  // ],
+  [
+    './test/data/in.tm1.js',
+    './test/data/defines.tm1.json', false,
+    './test/data/exp.tm1.tm1.js',
+  ],
 ]
 
 export async function testRppExpected() {
@@ -1048,15 +1047,15 @@ export function testAll() {
     console.log(ReversiblePreproc.queryVersion())
     // xxx test1()
     // xxx test2()
-    //  test3()
-    //  test4()
-    //  testByLine()
-    // testTpl(tplTestData1, 1)
-    // testTpl(tplTestData2, 2)
-    // testTpl(tplTestData3, 3)
-    // testTpl(tplTestData4, 4)
-    // testTpl(tplTestData5, 5)
-    // testTpl(tplTestData6, 6)
+     test3()
+     test4()
+     testByLine()
+    testTpl(tplTestData1, 1)
+    testTpl(tplTestData2, 2)
+    testTpl(tplTestData3, 3)
+    testTpl(tplTestData4, 4)
+    testTpl(tplTestData5, 5)
+    testTpl(tplTestData6, 6)
     testTpl(tplTestData7, 7)
     console.log('testAll PASS')
     return true
