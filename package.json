@@ -12,7 +12,8 @@
 	},
 	"scripts": {
 		"build": "./compileSrc.sh",
-		"test": "node -- test/call-test-reversible-preproc.js"
+		"test": "node -- test/call-test-reversible-preproc.js",
+		"rmpack": "rm *.tgz; npm pack"
 	},
 	"repository": {
 		"type": "git",

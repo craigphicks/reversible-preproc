@@ -12,9 +12,9 @@ This module enables the following preprocessor functionalities to be applied to 
    - both ordinary code and process templates code may be enabled/masked within using if related  commands. 
  - ability to modify the "defines" object from the source, adding template and template arguments, allowing reuse.
 
-The Mustache syntax is implemented with the npm *mustache* module.
+The mustache template syntax is implemented with the [npm *mustache*](https://www.npmjs.com/package/jsep) module.
 
-The conditional expression are parsed to APT (abstract parse tree) form using the npm *jsep* module,
+The conditional expression are parsed to APT (abstract parse tree) form using the [npm *jsep*](https://www.npmjs.com/package/jsep) module,
 then reduced to boolean using a simple in-this-module interpreter.
 
 The *"reversible"* moniker indicates that it is suitable for lightweight switching back 
@@ -202,7 +202,7 @@ but can begin with arbitrary whitespace.
  
 The open delimiter must be followed immediately by a command with no intervening space.
 
-After the command are 0, 1, or 2 arguments.
+Following the command are 0, 1, or 2 arguments.
 
 Arguments, when present, each follow a whitespace, and are either 
 - a dotted alphanum identifier, and/or
@@ -254,12 +254,14 @@ evalBody(body) {
 
 ## 5. 'if*' and 'endif' set of commands (not including 'Eval' variants)
 
+### 5.1 Condition syntax and implementation
+
 The `if` and `elif` commands evaluate the condition by
  - first, parsing to abstract parse tree (APT) using the 
  [npm `jsep` module](https://www.npmjs.com/package/jsep).
  - second, evaluating the parse tree with a simple internal interpreter.
  
-Basically it is a subset of javascript, sufficient for the purpose.
+The condition syntax is basically a subset of javascript, sufficient for the purpose.
  
 The implemented grammar is as follows: 
 
@@ -274,10 +276,16 @@ predefined keys |  `true`, `false`, `null`, `undefined`, `def`, `ndef`
 predefined functions | `def`, `ndef`
 user defined functions | not enabled, use `ifEval`, `elifEval`
 
-Typecasting is as expected with javascript. 
+Typecasting is similar to that of javascript. 
+
+
+Note: The `*Eval` variants `ifEval` and `elifEval` were described in detail in a previous section.
+
+
+### 5.2 Predefined functions 'def' and 'ndef'
 
 Access errors can occur for undefined properties used as keys.
-The predefined `def` and `ndef` functions enabled returning `false` in lieu of `exceptions`
+The predefined `def` and `ndef` functions enabled returning `false` instead of errors.
 
 Supposing `a.b` is defined but not `a.b.c`.  Then 
 ```
@@ -293,11 +301,20 @@ will return false and
 ```
 will return true.
 
-** Note: `endif` is a command end an if-chain, 
+### 5.3 Command 'endif' vs. the directive delimiter 'end--/*'
+
+To pre-empt confusion:  `endif` is a command ending an if-chain of commands:
+
+> if-command
+> [elif-command]*
+> [else-command]*
+> endif-command 
+
+
 while `--end*/` is a delimiter to end a directive,
 where a directive contains a command.**
 
-E.g.,
+The following ugly usage is legal, show just to prove a point.
 ```
 //--if true
   /*--if true --end*/
@@ -307,10 +324,51 @@ E.g.,
   //--endif
 /*--endif --end*/
 ```
-is technically legal, but not pretty.
+The postprocess result would be
 
-The `*Eval` variants `ifEval` and `elifEval` were described in detail in a previous section.
+```
+//--if true
+  /*--if true --end*/
+  console.log("hello world")
+  //--else 
+//!!plain  console.log("bye world")
+  //--endif
+/*--endif --end*/
+```
 
+### 5.4 postprocessing result
+
+With the exception of processor directives, all lines within "false" regions
+of an enclosing if-chain are prefixed with an annotation prefix, 
+by default `//!!plain`.  The `//!!` and `plain` components of that prefix
+are each configurable through initial options.  For example:
+
+Input:
+```
+//--addDefJson temp {"a":"A", "b":"B"}
+//--if false
+Nondirective
+//--elif false
+  //--render Directive {{temp.a}}
+//--else
+  //--render Directive {{temp.b}}
+//--endif
+```
+Output:
+```
+//--addDefJson temp {"a":"A", "b":"B"}
+//--if false
+//!! Nondirective
+//--elif false
+  //--render {{temp.a}}
+//--else
+  //--render {{temp.b}}
+//!!rendered
+B
+//!!endrendered
+//--endif
+
+```
 
 ## 6. 'addDef*' set of commands
 
@@ -382,9 +440,45 @@ The rendering is implemented with the npm `mustache` module.
 The `render` command takes an optional value parameter, which 
 when present is used as the mustache template string.  
 
-If not present, the contents of the internal 'template' are used as the template.
+If not present, the contents of the internal 'template' are used as the template.  After render completion, the contents of the internal template register are always cleared.
 
-After render, the contents of the internal template register are always cleared.
+The output from the `render` command is enclosed linewise between special annotated comments:
+Opening line:
+```
+//!!rendered
+```
+Ending line
+```
+//!!endrendered
+```
+For example
+
+Input:
+```
+//--addDefJson syms [ "A", "B", "C" ]
+/*--render
+{{#syms}}
+const sym{{.}} = Symbol({{.}})
+{{/syms}}
+--end*/
+```
+
+Output:
+```
+//--addDefJson syms [ "A", "B", "C" ]
+/*--render
+{{#syms}}
+const sym{{.}} = Symbol({{.}})
+{{/syms}}
+--end*/
+//!!rendered
+const symA = Symbol("A")
+const symB = Symbol("B")
+const symC = Symbol("C")
+//!!endRendered
+```
+
+
 
 
 

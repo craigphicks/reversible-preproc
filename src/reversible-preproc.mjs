@@ -182,25 +182,26 @@ function judgeLineArg(str, defines, jsepPreprocInterpret) {
       ]
     }
   }
-  else if (str[0] === ':') {
-    // TODO - DELETE THIS case 
-    // semicolon indicates to start a function to be eval'd
-    // the form is
-    // :(<variableName>)=>(<body>) and it be eval'd as a function
-    // ((<variableName>)=>(<body>))(<preproc jsonDefines>)
-    // where the preprocess json set up at program start will be passed as
-    // the argument to the function
-    try {
-      var fnstr = `(${str.slice(1)})(${JSON.stringify(defines)})`
-      return [eval(fnstr), null]
-    }
-    catch (e) {
-      return [
-        false,
-        new RppError(`function string ${fnstr} in ${str} could not be eval'd: `, e)
-      ]
-    }
-  } else {
+  // else if (str[0] === ':') {
+  //   // TODO - DELETE THIS case 
+  //   // semicolon indicates to start a function to be eval'd
+  //   // the form is
+  //   // :(<variableName>)=>(<body>) and it be eval'd as a function
+  //   // ((<variableName>)=>(<body>))(<preproc jsonDefines>)
+  //   // where the preprocess json set up at program start will be passed as
+  //   // the argument to the function
+  //   try {
+  //     var fnstr = `(${str.slice(1)})(${JSON.stringify(defines)})`
+  //     return [eval(fnstr), null]
+  //   }
+  //   catch (e) {
+  //     return [
+  //       false,
+  //       new RppError(`function string ${fnstr} in ${str} could not be eval'd: `, e)
+  //     ]
+  //   }
+  // } 
+  else {
     // TODO jsepPreprocInterpret.lineScript(str) called from here.
     try { return [jsepPreprocInterpret.execLineScript(str), null] }
     catch (e) {
