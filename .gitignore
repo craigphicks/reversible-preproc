@@ -9,3 +9,4 @@ dist/
 lib/
 *.tgz
 *.*gz
+test/*.js
