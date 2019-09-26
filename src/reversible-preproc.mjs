@@ -225,7 +225,7 @@ function createIfState(params) {
   }
 }
 
-class ReversiblePreproc {
+class RppCore {
   constructor(defines = {}, options = defaultOptions) {
     for (let k of Reflect.ownKeys(defaultOptions))
       if (!Reflect.ownKeys(options).includes(k))
@@ -339,7 +339,7 @@ class ReversiblePreproc {
 
   static _renderMustache_maxIterDefault() { return 1000 }
   static _renderMustache(tpl, defines, partials = {},
-    maxIter = ReversiblePreproc._renderMustache_maxIterDefault()) {
+    maxIter = RppCore._renderMustache_maxIterDefault()) {
     // to allow for multi-level and recursive substitutions, loop until no more change
     let resPrev = null, res = tpl
     let iter = 0
@@ -347,7 +347,7 @@ class ReversiblePreproc {
       resPrev = res
       res = Mustache.render(res, defines, partials)
     }
-    if (iter == ReversiblePreproc._renderMustache_maxIterDefault) {
+    if (iter == RppCore._renderMustache_maxIterDefault) {
       throw new RppError('too many Mustache iterations')
     }
     return res
@@ -529,7 +529,7 @@ class ReversiblePreproc {
             this.parseState.tplStr = tpl
 
           _assert(this.parseState.tplStr, "this.parseState.tplStr")
-          let res = ReversiblePreproc._renderMustache(
+          let res = RppCore._renderMustache(
             this.parseState.tplStr,
             this.defines,
             this.parseState.tplPartials
@@ -760,6 +760,11 @@ class ReversiblePreproc {
     }
   } // line
 
-} // class ReversiblePreproc
+} // class RppCore
 
-export default ReversiblePreproc
+export { RppCore }
+
+// // the following alias class should eventually be deleted
+// export default class ReversiblePreproc extends RppCore {
+//   constructor(...args) { super(...args) }
+// }

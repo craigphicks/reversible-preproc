@@ -4,7 +4,8 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
-var ReversiblePreproc = _interopDefault(require('../lib/index.js'));
+var index_js = require('../lib/index.js');
+var index_js__default = _interopDefault(index_js);
 var assert = require('assert');
 var assert__default = _interopDefault(assert);
 var dedent = _interopDefault(require('dedent'));
@@ -76,7 +77,7 @@ function test3() {
 //--endif
 `;
   //const readable = Readable.from(lineGen(textblock))
-  let rp1 = new ReversiblePreproc(ppJson);
+  let rp1 = new index_js.RppCore(ppJson);
   //for await (const line of readable) {    
   for (const line of lineGen(textblock)) {
     //console.log(line)
@@ -106,7 +107,7 @@ function test4() {
   //for await (const line of readable) {
   let lines = textblock.split('\n');
   for (let linein of lines) {
-    let rp1 = new ReversiblePreproc(ppJson);
+    let rp1 = new index_js.RppCore(ppJson);
     //let [err1,line1]=[null,null]
     let outp = rp1.line(linein);
     assert__default.ok(outp && outp instanceof Array && outp.length === 2);
@@ -124,7 +125,7 @@ function test4() {
 
 
 function testLineIfDirective(definesJson, lineWithIfDirective, boolErrExpected, boolResultExpected = null) {
-  let rp1 = new ReversiblePreproc(definesJson);
+  let rp1 = new index_js.RppCore(definesJson);
   let [err, lineOut] = rp1.line(lineWithIfDirective);
 
   assert__default.ok(Boolean(boolErrExpected) == Boolean(err), "err status did not match expected");
@@ -670,7 +671,7 @@ class TestTplOut {
 
 function testTpl(testData, testnum = -1) {
   for (let item of testData) {
-    let rpp = new ReversiblePreproc(item[0]);
+    let rpp = new index_js.RppCore(item[0]);
     let tto = new TestTplOut;
     let inp = item[1].split('\n');
     for (let linein of inp) {
@@ -805,7 +806,7 @@ async function testRppExpectedFile(
       let text = fs.readFileSync(definesFilename);
       defines = JSON.parse(text);
     }
-    let rpp = new ReversiblePreproc(defines);
+    let rpp = new index_js.RppCore(defines);
 
     //  return new Promise((resolve, reject) => {
     const instream = readline.createInterface({
@@ -938,7 +939,7 @@ async function testRppExpected() {
 
 function testAll() {
   try {
-    console.log(ReversiblePreproc.queryVersion());
+    console.log(index_js.RppCore.queryVersion());
     // xxx test1()
     // xxx test2()
      test3();

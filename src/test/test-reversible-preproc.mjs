@@ -2,6 +2,7 @@
 /* eslint-disable no-constant-condition */
 'use strict'
 import ReversiblePreproc from '../reversible-preproc.mjs'
+import { RppCore } from '../reversible-preproc.mjs'
 //import { Readable } from 'stream'
 import assert, { AssertionError } from 'assert'
 import dedent from 'dedent'
@@ -75,10 +76,10 @@ function* lineGen(text) {
 
 function test1() {
   //const readable = Readable.from(testDataGenerator(3))
-  let rp1 = new ReversiblePreproc({ test: 0 })
-  let rp2 = new ReversiblePreproc({})
-  let rp3 = new ReversiblePreproc({ test: 0 })
-  //  let rp4 = new ReversiblePreproc('*')
+  let rp1 = new RppCore({ test: 0 })
+  let rp2 = new RppCore({})
+  let rp3 = new RppCore({ test: 0 })
+  //  let rp4 = new RppCore('*')
   for (const line of testDataGenerator(3)) {
     process.stdout.write(line)
     let [err1, line1] = rp1.line(line)
@@ -104,10 +105,10 @@ function test2() {
     return `ifEval return (defines.foo && defines.foo.bar==${val})`
   }
   //const readable = Readable.from(testDataGenerator2(3, cmdstrFn))
-  let rp1 = new ReversiblePreproc({ foo: { bar: 0 } })
-  let rp2 = new ReversiblePreproc({})
-  let rp3 = new ReversiblePreproc({ foo: { bar: 0 } })
-  //let rp4 = new ReversiblePreproc('*')
+  let rp1 = new RppCore({ foo: { bar: 0 } })
+  let rp2 = new RppCore({})
+  let rp3 = new RppCore({ foo: { bar: 0 } })
+  //let rp4 = new RppCore('*')
   //for await (const line of readable) {
   for (const line of testDataGenerator2(3, cmdstrFn)) {
     let [err1, line1] = rp1.line(line)
@@ -179,7 +180,7 @@ function test3() {
 //--endif
 `
   //const readable = Readable.from(lineGen(textblock))
-  let rp1 = new ReversiblePreproc(ppJson)
+  let rp1 = new RppCore(ppJson)
   //for await (const line of readable) {    
   for (const line of lineGen(textblock)) {
     //console.log(line)
@@ -209,7 +210,7 @@ function test4() {
   //for await (const line of readable) {
   let lines = textblock.split('\n')
   for (let linein of lines) {
-    let rp1 = new ReversiblePreproc(ppJson)
+    let rp1 = new RppCore(ppJson)
     //let [err1,line1]=[null,null]
     let outp = rp1.line(linein)
     assert.ok(outp && outp instanceof Array && outp.length === 2)
@@ -227,7 +228,7 @@ function test4() {
 
 
 function testLineIfDirective(definesJson, lineWithIfDirective, boolErrExpected, boolResultExpected = null) {
-  let rp1 = new ReversiblePreproc(definesJson)
+  let rp1 = new RppCore(definesJson)
   let [err, lineOut] = rp1.line(lineWithIfDirective)
 
   assert.ok(Boolean(boolErrExpected) == Boolean(err), "err status did not match expected")
@@ -773,7 +774,7 @@ class TestTplOut {
 
 function testTpl(testData, testnum = -1) {
   for (let item of testData) {
-    let rpp = new ReversiblePreproc(item[0])
+    let rpp = new RppCore(item[0])
     let tto = new TestTplOut
     let inp = item[1].split('\n')
     for (let linein of inp) {
@@ -911,7 +912,7 @@ async function testRppExpectedFile(
       let text = fs.readFileSync(definesFilename)
       defines = JSON.parse(text)
     }
-    let rpp = new ReversiblePreproc(defines)
+    let rpp = new RppCore(defines)
 
     //  return new Promise((resolve, reject) => {
     const instream = readline.createInterface({
@@ -1044,7 +1045,7 @@ export async function testRppExpected() {
 
 export function testAll() {
   try {
-    console.log(ReversiblePreproc.queryVersion())
+    console.log(RppCore.queryVersion())
     // xxx test1()
     // xxx test2()
      test3()
