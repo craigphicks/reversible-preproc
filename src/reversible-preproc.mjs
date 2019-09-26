@@ -618,7 +618,12 @@ class ReversiblePreproc {
     throw new RppError(`no command found in ${line} offset ${offset}`)
   }
 
-  line(line, pushOutArg = null, callback = (e, x) => { return [e, x] }) {
+  line(
+    line,
+    pushOutArg = null,
+    callback = (e, x) => { return [e, x] },
+    wsOffIn = null
+  ) {
     try {
       let tmpOut = []
       let pushOut = (x) => {
@@ -635,17 +640,16 @@ class ReversiblePreproc {
           default: return tmpOut
         }
       }
-      line = this._removeFinalEol(line) // in case input EOL !== output EOL
+      let wsOff
+      if (wsOffIn === null) {
+        line = this._removeFinalEol(line) // in case input EOL !== output EOL
+        wsOff = line.search(/\S/)
+      } else {
+        if (line.length)
+          _assert(line.slice(0, -1)[0] !== '\n', 'input line ends in newline')
+        wsOff = wsOffIn
+      }
       this.parseState.linum++ // first line is line 1
-      let wsOff = line.search(/\S/)
-
-      // priority is to remove or modify annotated lines before any further processing
-      // if (wsOff>=0 && isSubstrEqual(line, wsOff, this.options.annStem)){
-      //   let off = wsOff+ this.options.annStem.length
-      //   if (isSubstrEqual(line, off, this.options.annPlain)){
-      //     line = line.substr(0,wsOff) + line.substr(off+this.options.annPlain.length+1)
-      //   }
-      // }
 
       // should we search for line head?
       if (!this.parseState.multiLineIn.cmdSym) {
@@ -756,40 +760,6 @@ class ReversiblePreproc {
     }
   } // line
 
-  lineX(line, pushOut = null, callback = (e, x) => { return [e, x] }) {
-    try {
-      line = this._removeFinalEol(line) // in case input EOL !== output EOL
-      this.parseState.linum++ // first line is line 1
-      let callbackLineout = null
-      let [multi, strippedLine] = this._parseLine_aux2(line)
-
-      if (!multi) {
-        let lineOut = this._ensureEol(strippedLine)
-        if (pushOut)
-          pushOut(lineOut)
-        else
-          callbackLineout = lineOut // back compat only, for v1.x.x tests 
-      }
-      else {
-        if (!pushOut)
-          throw RppError
-            // eslint-disable-next-line no-unexpected-multiline
-            ('pushOut must be defined to enable multiple line output (i.e. templates)')
-        for (let item of strippedLine) {
-          let lineOut = this._ensureEol(item)
-          pushOut(lineOut)
-        }
-      }
-      return callback(null, callbackLineout)
-    }
-    catch (e) {
-      if (e instanceof Error) {
-        return callback(e, null)
-      } else {
-        return callback(new RppError("unknown error: " + e), null)
-      }
-    }
-  }
 } // class ReversiblePreproc
 
 export default ReversiblePreproc
