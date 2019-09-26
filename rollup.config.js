@@ -6,13 +6,18 @@ import commonjs from "rollup-plugin-commonjs"
 
 export default [
 	{
-		input: "src/reversible-preproc.mjs",
+		input: [
+			//"src/reversible-preproc.mjs",
+			"src/reversible-preproc-transform.mjs"
+		],
 		output: {
 			file: "lib/index.js",
 			format: "cjs"
 		},
 		plugins:[
-			nodeResolve({}),
+			nodeResolve({
+				preferBuiltins:true
+			}),
 			commonjs({})
 		]
 	},{
