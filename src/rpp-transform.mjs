@@ -1,7 +1,7 @@
 'use strict'
 import stream from 'stream'
 import string_decoder from 'string_decoder'
-import { RppCore } from './reversible-preproc.mjs'
+import { RppCore } from './rpp-core.mjs'
 
 class RpptError extends Error {
   constructor(m) {
@@ -83,7 +83,7 @@ class RppTransform extends stream.Transform {
   }
 }
 
-export { RppTransform, RppCore }
+export { RppTransform }
 
 // the following alias class should eventually be deleted
 export default class ReversiblePreproc extends RppCore {

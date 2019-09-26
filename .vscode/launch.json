@@ -11,9 +11,6 @@
       "program": "${workspaceFolder}/src/test/example-rpp-usage.mjs",
       "console": "internalConsole",
       "outputCapture": "std",
-      "runtimeArgs": [
-        "--experimental-modules"
-      ]
     },
     {
       "type": "node",

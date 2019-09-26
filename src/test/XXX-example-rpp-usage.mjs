@@ -6,11 +6,12 @@
 // import fs from 'fs'
 // import events from 'events'
 
-ReversiblePreproc = require('lib/index')
-split2 = require('split2')
-through2 = require('through2')
-fs = require('fs')
-events = require('events')
+//ReversiblePreproc = require('lib/index')
+const RppCore = require('../lib/rpp-core.js')
+var split2 = require('split2')
+var through2 = require('through2')
+var fs = require('fs')
+var events = require('events')
 
 
 async function PreProc(rpp, readable, writable) {
@@ -33,7 +34,7 @@ async function PreProc(rpp, readable, writable) {
 
 let rawdata = fs.readFileSync("./test/data/defines.demo0.json")
 let defJson = JSON.parse(rawdata)
-let rpp = new ReversiblePreproc(defJson)
+let rpp = new RppCore(defJson)
 let readable = fs.createReadStream("./test/data/in.demo0.json")
 //let writable = fs.createWriteStream(argv.outfile)
 let writable = process.stdout

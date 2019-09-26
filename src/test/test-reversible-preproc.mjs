@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-constant-condition */
 'use strict'
-import ReversiblePreproc from '../reversible-preproc.mjs'
-import { RppCore } from '../reversible-preproc.mjs'
+//import ReversiblePreproc from '../reversible-preproc.mjs'
+import { RppCore } from '../rpp-core.mjs'
 //import { Readable } from 'stream'
 import assert, { AssertionError } from 'assert'
 import dedent from 'dedent'
