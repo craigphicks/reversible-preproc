@@ -1,84 +1,30 @@
 'use strict'
 
+import * as RppLib from'./rpp-util.mjs' 
 import JsepPreprocInterpret from './jsep-preproc-interpret.mjs'
-import RppBaseError from './prependable-error.mjs'
 import Mustache from 'mustache'
+// globally disable all Mustache escaping 
+Mustache.escape = function (text) { return text }
+
 //import dedent from 'dedent'
 //import jsep from 'jsep'
 //import { AssertionError } from 'assert';
 
-function queryVersion() { return "reversible-preproc 2.0.3" }
-
-// globally disable all Mustache escaping 
-Mustache.escape = function (text) { return text }
-
-class RppError extends RppBaseError {
-  constructor(...params) {
-    super(...params)
-  }
-}
-
-// _assert with an underbar 
-function _assert(cond, msg) {
-  if (!cond)
-    throw new RppError(msg ? msg : 'assertion failed')
-}
-
-
-function hasOwnKey(obj, key) {
-  return Reflect.getOwnPropertyDescriptor(obj, key) !== undefined
-}
-
-// function deepCopyViaJson(obj) {
-//   let copy = JSON.stringify(obj)
-//   return JSON.parse(copy)
-// }
-
-//const identifierRegex = /^[[$A-Z_][0-9A-Z_$]*/i
-function createIdentifierRegex() {
-  const core = "[$A-Z_][0-9A-Z_$]*"
-  return RegExp(`^${core}(.${core})*`, 'i')
-}
+const RppError = RppLib.RppError
+const _assert = RppLib._assert
+const queryVersion = RppLib.queryVersion
 
 function matchNextIdentifier(line) {
   let reres = /[^ \t]+/.exec(line)
   if (!reres)
     throw new RppError('no possible identifier found')
-  let reValid = createIdentifierRegex()
+  let reValid = RppLib.createDottedIdentifierRegex()
   if (!reValid.test(reres[0]))
     throw new RppError(`found invalid identifier ${reres[0]}`)
   // parse into array
   let keys = reres[0].split('.')
   return { identifier: reres[0], index: reres.index, keys: keys }
 }
-
-function forcePropertyValue(obj, keys, value) {
-  _assert(keys && keys.length > 0, 'keys null or empty')
-  _assert(typeof obj === 'object',
-    `obj must be type "object" not ${typeof obj}`)
-  let parent = obj
-  for (let n = 0; n < keys.length - 1; n++) {
-    if (!hasOwnKey(parent, keys[n])
-      || typeof parent[keys[n]] !== 'object'
-      || parent[keys[n]] instanceof Array)
-      parent[keys[n]] = {}
-    parent = parent[keys[n]]
-  }
-  parent[keys.slice(-1)] = value
-}
-
-
-// function lookupPropertyValue(obj, keys) {
-//   _assert(keys && keys.length > 0, 'keys null or empty')
-//   let parent = obj
-//   for (let n = 0; n < keys.length; n++) {
-//     _assert(typeof parent === 'object',
-//       `must be type "object" not ${typeof parent}`)
-//     _assert(hasOwnKey(parent, keys[n], `key ${keys[n]} not present`))
-//     parent = parent[keys[n]]
-//   }
-//   return parent
-// }
 
 var defaultOptions = {
   testMode: false, // cmd start lines only prepended by true or false
@@ -413,7 +359,7 @@ class RppCore {
       default: throw new RppError('programmer error')
     }
 
-    forcePropertyValue(this.defines, lhsRes.keys, val)
+    RppLib.forcePropertyValue(this.defines, lhsRes.keys, val)
     return
   }
 

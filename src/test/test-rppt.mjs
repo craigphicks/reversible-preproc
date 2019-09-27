@@ -1,8 +1,10 @@
 'use strict'
-import ReversiblePreprocTransform from './reversible-preproc-transform.mjs'
+import Rpp from '../rpp-lib.mjs'
 //import dedent from 'dedent'
 import stream from 'stream'
 import util from 'util'
+
+const RppTransform = Rpp.Transform
 
 class Workaround extends stream.Writable {
   // for https://github.com/nodejs/node/issues/26550 
@@ -25,7 +27,7 @@ async function testOne(inData, expectErr=false) {
 
   let p = util.promisify(stream.pipeline)(
     readable,
-    new ReversiblePreprocTransform(),
+    new RppTransform(),
     //process.stdout,
     new Workaround(),
     // (err) => {

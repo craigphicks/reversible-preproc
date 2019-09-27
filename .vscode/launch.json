@@ -7,10 +7,14 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "example-rpp-usage",
-      "program": "${workspaceFolder}/src/test/example-rpp-usage.mjs",
+      "name": "test-assign-json.mjs",
+      "program": "${workspaceFolder}/src/test/test-assign-json.mjs",
       "console": "internalConsole",
       "outputCapture": "std",
+      "runtimeArgs": [
+        "--experimental-modules"
+      ],
+      "env": {"barfoo":"3"}
     },
     {
       "type": "node",

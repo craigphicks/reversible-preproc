@@ -2,16 +2,19 @@
 /* eslint-disable no-constant-condition */
 'use strict'
 //import ReversiblePreproc from '../reversible-preproc.mjs'
-import { RppCore } from '../rpp-core.mjs'
+//import { RppCore } from '../rpp-core.mjs'
+import Rpp from '../rpp-lib.mjs'
 //import { Readable } from 'stream'
 import assert, { AssertionError } from 'assert'
 import dedent from 'dedent'
 import * as fs from 'fs'
 import readline from 'readline'
-import resolve from 'resolve'
+//import resolve from 'resolve'
 
 // import split2 from 'split2'
 // import through2 from 'through2'
+
+const RppCore = Rpp.Core
 
 function* testDataGenerator(depth) {
   function* gen(d, name, val, n) {

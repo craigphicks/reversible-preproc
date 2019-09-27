@@ -2,12 +2,13 @@
 import stream from 'stream'
 import string_decoder from 'string_decoder'
 import { RppCore } from './rpp-core.mjs'
+import { RppError } from './rpp-util.mjs'
 
-class RpptError extends Error {
-  constructor(m) {
-    super(m)
-  }
-}
+// class RpptError extends Error {
+//   constructor(m) {
+//     super(m)
+//   }
+// }
 
 class RppTransform extends stream.Transform {
   constructor(rppInstOrOpt, streamOptions) {
@@ -26,7 +27,7 @@ class RppTransform extends stream.Transform {
   }
   _assert(cond, msg) {
     if (!cond)
-      throw new RpptError(msg ? msg : 'assert fail')
+      throw new RppError(msg ? msg : 'assert fail')
   }
   rppLine(line, wsOff) {
     // testing
@@ -83,7 +84,7 @@ class RppTransform extends stream.Transform {
   }
 }
 
-export { RppTransform, RppCore }
+export { RppTransform }
 
 // the following alias class should eventually be deleted
 // export default class ReversiblePreproc extends RppCore {
