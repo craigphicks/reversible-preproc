@@ -5,7 +5,10 @@
 	"main": "lib/index.js",
 	"files": [
 		"lib/*",
-		"test/*"
+    "test/*.js",
+    "test/data/*.js",
+    "test/data/*.json",
+    "test.sh"
 	],
 	"directories": {
 		"lib": "lib",
