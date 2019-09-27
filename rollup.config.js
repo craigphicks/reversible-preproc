@@ -7,11 +7,11 @@ import commonjs from "rollup-plugin-commonjs"
 export default [
 	{
 		input: [
-			"src/rpp-core.mjs",
+			//"src/rpp-core.mjs",
 			"src/rpp-transform.mjs",
 		],
 		output: {
-			dir: "lib",
+			file: "lib/index.js",
 			format: "cjs"
 		},
 		plugins:[
@@ -30,7 +30,7 @@ export default [
 				resolveId( source ){
 					console.log("myResolveId: ",source)
 					if (source.includes("/reversible-preproc")){
-						return {id: '../lib/rpp-core.js', external: true}
+						return {id: '../lib/index.js', external: true}
 					}
 					return null
 				}

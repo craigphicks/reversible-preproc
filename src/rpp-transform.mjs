@@ -83,10 +83,10 @@ class RppTransform extends stream.Transform {
   }
 }
 
-export { RppTransform }
+export { RppTransform, RppCore }
 
 // the following alias class should eventually be deleted
-export default class ReversiblePreproc extends RppCore {
-  constructor(...args) { super(...args) }
-}
+// export default class ReversiblePreproc extends RppCore {
+//   constructor(...args) { super(...args) }
+// }
 

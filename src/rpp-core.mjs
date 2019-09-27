@@ -58,11 +58,10 @@ function forcePropertyValue(obj, keys, value) {
     `obj must be type "object" not ${typeof obj}`)
   let parent = obj
   for (let n = 0; n < keys.length - 1; n++) {
-    if (!hasOwnKey(parent, keys[n]))
+    if (!hasOwnKey(parent, keys[n])
+      || typeof parent[keys[n]] !== 'object'
+      || parent[keys[n]] instanceof Array)
       parent[keys[n]] = {}
-    else
-      _assert(typeof parent[keys[n]] === 'object',
-        `expecting typeof to be "object" but was ${typeof parent[keys[n]]}`)
     parent = parent[keys[n]]
   }
   parent[keys.slice(-1)] = value
@@ -621,10 +620,12 @@ class RppCore {
   line(
     line,
     pushOutArg = null,
-    callback = (e, x) => { return [e, x] },
+    callback = null,
     wsOffIn = null
   ) {
     try {
+      if (!callback)
+        callback = (e, x) => { return [e, x] }
       let tmpOut = []
       let pushOut = (x) => {
         x = this._ensureEol(x)
