@@ -2,7 +2,7 @@
 import RppBaseError from './prependable-error.mjs'
 import fs from 'fs'
 
-export function queryVersion() { return "reversible-preproc 2.0.3" }
+export function queryVersion() { return "reversible-preproc 2.0.4" }
 
 export class RppError extends RppBaseError {
   constructor(...params) {
