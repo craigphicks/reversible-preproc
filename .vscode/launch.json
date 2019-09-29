@@ -7,14 +7,13 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "test-assign-json.mjs",
-      "program": "${workspaceFolder}/src/test/test-assign-json.mjs",
+      "name": "test-force-assign-rhs",
+      "program": "${workspaceFolder}/src/test/test-force-assign-rhs.mjs",
       "console": "internalConsole",
       "outputCapture": "std",
       "runtimeArgs": [
         "--experimental-modules"
       ],
-      "env": {"barfoo":"3"}
     },
     {
       "type": "node",

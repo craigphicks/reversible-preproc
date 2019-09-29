@@ -26,7 +26,7 @@ export default [
     input: [
       "src/test/test-reversible-preproc.mjs",
       "src/test/test-rppt.mjs",
-      "src/test/test-assign-json.mjs",
+      "src/test/test-force-assign-rhs.mjs",
     ],
     plugins: [
       {

@@ -29,6 +29,8 @@ export function forcePropertyValue(obj, keys, value) {
   _assert(keys && keys.length > 0, 'keys null or empty')
   _assert(typeof obj === 'object',
     `obj must be type "object" not ${typeof obj}`)
+  _assert(!(obj instanceof Array),
+    `obj must not be instance of Array`)
   let parent = obj
   for (let n = 0; n < keys.length - 1; n++) {
     if (!hasOwnKey(parent, keys[n])
@@ -57,64 +59,43 @@ function LikelyTrueObject(obj) {
     && !(obj instanceof Array))
 }
 
-const symAssignJsonFile = Symbol("AssignJsonFile")
-const symAssignJsonRaw = Symbol("AssignJsonRaw")
-const symAssignJsonEnv = Symbol("AssignJsonEnv")
 
-function _AssignJson(object, keyname, string, sym) {
-  if (typeof keyname !== 'string') {
-    _assert(keyname === undefined || keyname === null,
-      `expecting non-string keyname to be undefined or null, ${keyname}`)
-  }
-  let raw, props
-  if (sym === symAssignJsonFile)
-    raw = fs.readFileSync(string)
-  else if (sym === symAssignJsonRaw)
-    raw = string
-  else if (sym === symAssignJsonEnv){
-    props = process.env
-    if (!keyname)
-      keyname='env'
-  }
-  else
-    throw Error("programmer error")
-
-  if (sym !== symAssignJsonEnv)
-    props = JSON.parse(raw)
-
-  if (!LikelyTrueObject(props)) {
-    if (keyname) {
-      object[keyname] = props
-    } else {
-      throw Error(`cannot assign non-object to top level, ${props}`)
-    }
-  } else {
-    if (!keyname) {
-      Object.assign(object, props)
-    } else if (!LikelyTrueObject(object[keyname])) {
-      object[keyname] = props
-    } else {
-      Object.assign(object[keyname], props)
-    }
-  }
-} // _AssignJson
-
-export class AssignJson {
-  constructor() { }
-  static symFile() { return symAssignJsonFile }
-  static symRaw() { return symAssignJsonRaw }
-  static symEnv() { return symAssignJsonEnv }
-  static FromAny(object, keyname, string, sym) {
-    _AssignJson(object, keyname, string, sym)
-  }
-  static FromFile(object, keyname, string) {
-    _AssignJson(object, keyname, string, symAssignJsonFile)
-  }
-  static FromRaw(object, keyname, string) {
-    _AssignJson(object, keyname, string, symAssignJsonRaw)
-  }
-  static FromEnv(object, keyname) {
-    _AssignJson(object, keyname, null, symAssignJsonEnv)
-  }
+export function convertDottedIdentifierStrToArray(str){
+  if (!createDottedIdentifierRegex().test(str))
+    throw new RppError(`invalid dotted identifier string: ${str}`)
+  return str.split('.') 
 }
+
+export function forceAssignRHS(obj, keys, rhs){
+  _assert(typeof obj === 'object',
+    `obj must be type "object" not ${typeof obj}`)
+  _assert(!(obj instanceof Array),
+    `obj must not be instance of Array`)
+  if (typeof keys === 'string')
+    keys = convertDottedIdentifierStrToArray(keys)
+  if (!keys || ! keys.length) {
+    if (!LikelyTrueObject(rhs)) {
+      throw new RppError(`cannot assign non-object to top level, ${rhs}`)
+    } else {
+      Object.assign(obj,rhs)
+      return obj
+    }
+  }
+  let parent = obj
+  for (let n = 0; n < keys.length - 1; n++) {
+    if (!hasOwnKey(parent, keys[n])
+      || typeof parent[keys[n]] !== 'object'
+      || parent[keys[n]] instanceof Array)
+      parent[keys[n]] = {}
+    parent = parent[keys[n]]
+  }
+  if (!LikelyTrueObject(rhs) || !LikelyTrueObject(parent[keys.slice(-1)[0]])) {
+    parent[keys.slice(-1)[0]] = rhs
+  } else {
+    Object.assign(parent[keys.slice(-1)[0]], rhs)
+  }
+  return obj
+}
+
+
 
