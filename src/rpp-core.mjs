@@ -172,6 +172,7 @@ function createIfState(params) {
 
 class RppCore {
   constructor(defines = {}, options = defaultOptions) {
+    options = options ? options : {}
     for (let k of Reflect.ownKeys(defaultOptions))
       if (!Reflect.ownKeys(options).includes(k))
         options[k] = defaultOptions[k]

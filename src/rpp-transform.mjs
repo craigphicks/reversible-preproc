@@ -11,19 +11,21 @@ import { RppError } from './rpp-util.mjs'
 // }
 
 class RppTransform extends stream.Transform {
-  constructor(rppInstOrOpt, streamOptions) {
+  constructor(rppInstOrDefines, secondArg, thirdArg) {
+    let rpp, streamOptions
+    if (rppInstOrDefines instanceof RppCore) {
+      rpp = rppInstOrDefines
+      streamOptions = secondArg
+    } else {
+      rpp = new RppCore(rppInstOrDefines, secondArg)
+      streamOptions = thirdArg
+    }
     super(streamOptions)
+    this.rpp = rpp
     this.decoder = new string_decoder.StringDecoder('utf8')
     this.remChunk = null
     this.reNonWS = RegExp("[^ \\t]")
     this.reEOL = RegExp('\\n')
-    if (rppInstOrOpt instanceof RppCore) {
-      this.rpp = rppInstOrOpt
-    }
-    else {
-      this.rpp = new RppCore(rppInstOrOpt)
-    }
-
   }
   _assert(cond, msg) {
     if (!cond)
