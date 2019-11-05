@@ -1,14 +1,8 @@
 # 'reversible-preproc' Usage Documentation 
 
-Version 2.0.3
-
-*Note: Version `2.x.x` is a breaking change from version `1.x.x`.*
-
 ## 1. Outline
 
-
-![Flowchart](./rpp-flowchart.svg)
-
+*Note: Version `2.x.x` is a breaking change from version `1.x.x`.*
 
 This module enables the following preprocessor functionalities to be applied to a source file:
  - a "defines" object passed as an argument into the processor.
