@@ -7,7 +7,9 @@ Version 2.0.3
 ## 1. Outline
 
 
-![Flowchart](./rpp-flowchart.svg)
+![Fig 1. Flowchart](./rpp-flow.svg)
+
+
 
 
 This module enables the following preprocessor functionalities to be applied to a source file:
